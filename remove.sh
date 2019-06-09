@@ -1,3 +1,3 @@
 #!/bin/bash
 
-sudo rmmod veikkdriver
+sudo rmmod veikk
