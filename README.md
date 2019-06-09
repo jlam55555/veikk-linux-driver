@@ -18,4 +18,3 @@ Using the [Wacom driver][1] as guidance
     ./remove.sh
 
 [1]: https://github.com/torvalds/linux/blob/master/drivers/hid/wacom_wac.c
-!veikkdriver.c
