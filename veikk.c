@@ -16,6 +16,7 @@ struct veikk_vei {
   struct input_dev *touch_input;
   struct input_dev *pad_input;
   struct kfifo_rec_ptr_2 pen_fifo;
+  unsigned char data[VEIKK_PKGLEN_MAX];
 };
 
 // struct to hold driver data
@@ -33,6 +34,9 @@ static const struct hid_device_id id_table[] = {
 MODULE_DEVICE_TABLE(hid, id_table);
 
 // other functions
+void veikk_vei_irq(struct veikk_vei *veikk_vei, size_t len) {
+
+}
 static int veikk_open(struct input_dev *dev) {
   struct veikk *veikk = input_get_drvdata(dev);
 
@@ -203,6 +207,8 @@ static int veikk_parse_and_register(struct veikk *veikk) {
   // wacom_set_shared_values
   devres_close_group(&hdev->dev, veikk);
 
+  return 0;
+
 fail:
   // wacom_release_resources
   printk(KERN_WARNING "Error from veikk_parse_and_register(): %i", error);
@@ -219,9 +225,6 @@ static int veikk_probe(struct hid_device *hdev, const struct hid_device_id *id) 
 
   printk(KERN_INFO "Inside veikk_probe()");
   
-  if(!id->driver_data)
-    return -EINVAL;
-
   veikk = devm_kzalloc(&hdev->dev, sizeof(struct veikk), GFP_KERNEL);
   if(!veikk) {
     error = -ENODEV;
@@ -273,7 +276,19 @@ static void veikk_report(struct hid_device *hdev, struct hid_report *report) {
   printk(KERN_INFO "Inside veikk_report()");
 }
 static int veikk_raw_event(struct hid_device *hdev, struct hid_report *report, u8 *raw_data, int size) {
+  struct veikk *veikk = hid_get_drvdata(hdev);
+
   printk(KERN_INFO "Inside veikk_raw_event()");
+
+	if (size > VEIKK_PKGLEN_MAX)
+		return 1;
+
+	memcpy(veikk->veikk_vei.data, raw_data, size);
+
+  printk(KERN_INFO "DATA: %s", veikk->veikk_vei.data);
+
+	veikk_vei_irq(&veikk->veikk_vei, size);
+  
   return 0;
 }
 
