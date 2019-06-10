@@ -3,7 +3,4 @@
 !veikk.c
 !.gitignore
 !README.md
-!build.sh
-!remove.sh
-!install.sh
 !Makefile

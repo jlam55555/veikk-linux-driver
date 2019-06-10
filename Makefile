@@ -8,3 +8,4 @@ clean:
 
 install:
 	make -C /lib/modules/$(shell uname -r)/build M=$(CURDIR) modules_install
+	depmod -ae
