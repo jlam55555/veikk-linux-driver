@@ -25,7 +25,6 @@ replacing the `x`s with the corresponding values from `ls /sys/bus/hid/devices`.
 
 ### Remove instructions
 
-Script to remove driver coming soon
-
+    sudo make uninstall
 
 [1]: https://github.com/torvalds/linux/blob/master/drivers/hid/wacom_wac.c

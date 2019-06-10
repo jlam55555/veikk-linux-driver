@@ -82,6 +82,8 @@ int veikk_setup_pen_input_capabilities(struct input_dev *input_dev, struct veikk
 
   return 0;
 }
+
+/* No touch(screen?) input capabilities on the S640
 int veikk_setup_touch_input_capabilities(struct input_dev *input_dev, struct veikk_vei *veikk_vei) {
 
   input_dev->evbit[0] |= BIT_MASK(EV_KEY) | BIT_MASK(EV_ABS);
@@ -97,6 +99,7 @@ int veikk_setup_touch_input_capabilities(struct input_dev *input_dev, struct vei
 
   return 0;
 }
+*/
 static struct input_dev *veikk_allocate_input(struct veikk *veikk) {
   struct input_dev *input_dev;
   struct hid_device *hdev = veikk->hdev;
@@ -105,10 +108,10 @@ static struct input_dev *veikk_allocate_input(struct veikk *veikk) {
   if(!input_dev)
     return NULL;
 
-  input_dev->name = "will be overwritten so not important"; // TODO: fix this
+  input_dev->name = "Veikk device"; // will be overwritten
   input_dev->phys = hdev->phys;
   input_dev->dev.parent = &hdev->dev;
-  input_dev->open = veikk_open; // TODO: implement this
+  input_dev->open = veikk_open;
   input_dev->close = veikk_close;
   input_dev->uniq = hdev->uniq;
   input_dev->id.bustype = hdev->bus;
@@ -129,9 +132,9 @@ static int veikk_allocate_inputs(struct veikk *veikk) {
   if(!veikk_vei->pen_input || !veikk_vei->touch_input || !veikk_vei->pad_input)
     return -ENOMEM;
 
-  veikk_vei->pen_input->name = "Testing pen 1";
-  veikk_vei->touch_input->name = "Testing touch 1";
-  veikk_vei->pad_input->name = "Testing pad 1";
+  veikk_vei->pen_input->name = "Veikk S640 Pen";
+  veikk_vei->touch_input->name = "Veikk Touch";
+  veikk_vei->pad_input->name = "Veikk Pad";
 
   return 0;
 }
@@ -155,18 +158,11 @@ static int veikk_register_inputs(struct veikk *veikk) {
       goto fail;
   }
   
-  // TODO: is there a touch on this thing?
+  // TODO: is there a touch(screen?) on this thing?
   // I don't think this is being used rn
-  error = veikk_setup_touch_input_capabilities(touch_input_dev, veikk_vei);
-  if(error) {
-    input_free_device(touch_input_dev);
-    veikk_vei->touch_input = NULL;
-    touch_input_dev = NULL;
-  } else {
-    error = input_register_device(touch_input_dev);
-    if(error)
-      goto fail;
-  }
+  input_free_device(touch_input_dev);
+  veikk_vei->touch_input = NULL;
+  touch_input_dev = NULL;
 
   // TODO: is there a pad on this thing?
   // I don't think this is being used rn
