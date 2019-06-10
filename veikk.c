@@ -35,7 +35,29 @@ MODULE_DEVICE_TABLE(hid, id_table);
 
 // other functions
 void veikk_vei_irq(struct veikk_vei *veikk_vei, size_t len) {
+  char *data = veikk_vei->data;
+  struct input_dev *input = veikk_vei->pen_input;
+  // unsigned short prox, pressure = 0;
 
+  input_report_key(input, BTN_TOUCH, (data[1] & 0x01));
+  input_report_key(input, BTN_STYLUS, (data[1] & 0x02));
+  input_report_key(input, BTN_STYLUS2, (data[1] & 0x04));
+
+  input_report_abs(input, ABS_X, data[3]);
+  input_report_abs(input, ABS_Y, data[5]);
+  input_report_abs(input, ABS_PRESSURE, data[6]);
+
+  // TODO: remove; for debugging purposes only
+  printk(KERN_INFO "X Y: %i %i", data[3], data[5]);
+
+  input_report_key(input, ABS_PRESSURE, data[6]);
+
+  if(veikk_vei->pen_input)
+    input_sync(veikk_vei->pen_input);
+  if(veikk_vei->touch_input)
+    input_sync(veikk_vei->touch_input);
+  if(veikk_vei->pad_input)
+    input_sync(veikk_vei->pad_input);
 }
 static int veikk_open(struct input_dev *dev) {
   struct veikk *veikk = input_get_drvdata(dev);
@@ -51,10 +73,12 @@ static void veikk_close(struct input_dev *dev) {
 int veikk_setup_pen_input_capabilities(struct input_dev *input_dev, struct veikk_vei *veikk_vei) {
   input_dev->evbit[0] |= BIT_MASK(EV_KEY) | BIT_MASK(EV_ABS);
 
-  __set_bit(INPUT_PROP_DIRECT, input_dev->propbit);
-  // or __set_bit(INPUT_PROP_POINTER, input_dev->propbit);
+  //__set_bit(INPUT_PROP_DIRECT, input_dev->propbit);
+   __set_bit(INPUT_PROP_POINTER, input_dev->propbit);
 
   __set_bit(BTN_TOUCH, input_dev->keybit);
+  __set_bit(BTN_STYLUS, input_dev->keybit);
+  __set_bit(BTN_STYLUS2, input_dev->keybit);
   __set_bit(ABS_MISC, input_dev->absbit);
 
   input_set_abs_params(input_dev, ABS_X, 0, 32767, 0, 0);
@@ -69,8 +93,8 @@ int veikk_setup_touch_input_capabilities(struct input_dev *input_dev, struct vei
 
   input_dev->evbit[0] |= BIT_MASK(EV_KEY) | BIT_MASK(EV_ABS);
 
-  __set_bit(INPUT_PROP_DIRECT, input_dev->propbit);
-  // or __set_bit(INPUT_PROP_POINTER, input_dev->propbit);
+  //__set_bit(INPUT_PROP_DIRECT, input_dev->propbit);
+  __set_bit(INPUT_PROP_POINTER, input_dev->propbit);
 
   __set_bit(BTN_TOUCH, input_dev->keybit);
 
@@ -278,20 +302,21 @@ static void veikk_report(struct hid_device *hdev, struct hid_report *report) {
 static int veikk_raw_event(struct hid_device *hdev, struct hid_report *report, u8 *raw_data, int size) {
   struct veikk *veikk = hid_get_drvdata(hdev);
 
-  int i, s;     // TODO: remove later, just for debugging
-  unsigned char dataString[size * 9 + 1];
+  /*int i, s;     // TODO: remove later, just for debugging
+  unsigned char dataString[size * 9 + 1];*/
 
-  printk(KERN_INFO "Inside veikk_raw_event()");
+  /* printk(KERN_INFO "Inside veikk_raw_event()"); */
 
 	if (size > VEIKK_PKGLEN_MAX)
 		return 1;
 
 	memcpy(veikk->veikk_vei.data, raw_data, size);
 
+  // DATA DEBUGGING
   //printk(KERN_INFO "DATA: %s", veikk->veikk_vei.data);
   //printk(KERN_INFO "u8 size: %lu", sizeof(u8));
   //printk(KERN_INFO "DATASIZE: %i", size);
-  for(i = 0; i < size; i++) {
+  /*for(i = 0; i < size; i++) {
     s = 9 * i;
     dataString[s + 0] = '0' + !!(raw_data[i] & 0x80);
     dataString[s + 1] = '0' + !!(raw_data[i] & 0x40);
@@ -312,7 +337,7 @@ static int veikk_raw_event(struct hid_device *hdev, struct hid_report *report, u
   printk(KERN_INFO "4thB: %i", raw_data[4]);
   printk(KERN_INFO "5thB: %i", raw_data[5]);
   printk(KERN_INFO "6thB: %i", raw_data[6]);
-  printk(KERN_INFO "7thB: %i", raw_data[7]);
+  printk(KERN_INFO "7thB: %i", raw_data[7]);*/
 
 	veikk_vei_irq(&veikk->veikk_vei, size);
   
