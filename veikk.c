@@ -278,6 +278,9 @@ static void veikk_report(struct hid_device *hdev, struct hid_report *report) {
 static int veikk_raw_event(struct hid_device *hdev, struct hid_report *report, u8 *raw_data, int size) {
   struct veikk *veikk = hid_get_drvdata(hdev);
 
+  int i, s;     // TODO: remove later, just for debugging
+  unsigned char dataString[size * 9 + 1];
+
   printk(KERN_INFO "Inside veikk_raw_event()");
 
 	if (size > VEIKK_PKGLEN_MAX)
@@ -285,7 +288,31 @@ static int veikk_raw_event(struct hid_device *hdev, struct hid_report *report, u
 
 	memcpy(veikk->veikk_vei.data, raw_data, size);
 
-  printk(KERN_INFO "DATA: %s", veikk->veikk_vei.data);
+  //printk(KERN_INFO "DATA: %s", veikk->veikk_vei.data);
+  //printk(KERN_INFO "u8 size: %lu", sizeof(u8));
+  //printk(KERN_INFO "DATASIZE: %i", size);
+  for(i = 0; i < size; i++) {
+    s = 9 * i;
+    dataString[s + 0] = '0' + !!(raw_data[i] & 0x80);
+    dataString[s + 1] = '0' + !!(raw_data[i] & 0x40);
+    dataString[s + 2] = '0' + !!(raw_data[i] & 0x20);
+    dataString[s + 3] = '0' + !!(raw_data[i] & 0x10);
+    dataString[s + 4] = '0' + !!(raw_data[i] & 0x08);
+    dataString[s + 5] = '0' + !!(raw_data[i] & 0x04);
+    dataString[s + 6] = '0' + !!(raw_data[i] & 0x02);
+    dataString[s + 7] = '0' + !!(raw_data[i] & 0x01);
+    dataString[s + 8] = ' ';
+  }
+  dataString[9 * i] = '\0';
+  printk(KERN_INFO "DATA: %s", dataString);
+  printk(KERN_INFO "0thB: %i", raw_data[0]);
+  printk(KERN_INFO "1thB: %i", raw_data[1]);
+  printk(KERN_INFO "2thB: %i", raw_data[2]);
+  printk(KERN_INFO "3thB: %i", raw_data[3]);
+  printk(KERN_INFO "4thB: %i", raw_data[4]);
+  printk(KERN_INFO "5thB: %i", raw_data[5]);
+  printk(KERN_INFO "6thB: %i", raw_data[6]);
+  printk(KERN_INFO "7thB: %i", raw_data[7]);
 
 	veikk_vei_irq(&veikk->veikk_vei, size);
   
