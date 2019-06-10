@@ -37,20 +37,14 @@ MODULE_DEVICE_TABLE(hid, id_table);
 void veikk_vei_irq(struct veikk_vei *veikk_vei, size_t len) {
   char *data = veikk_vei->data;
   struct input_dev *input = veikk_vei->pen_input;
-  // unsigned short prox, pressure = 0;
 
   input_report_key(input, BTN_TOUCH, (data[1] & 0x01));
   input_report_key(input, BTN_STYLUS, (data[1] & 0x02));
   input_report_key(input, BTN_STYLUS2, (data[1] & 0x04));
 
-  input_report_abs(input, ABS_X, data[3]);
-  input_report_abs(input, ABS_Y, data[5]);
-  input_report_abs(input, ABS_PRESSURE, data[6]);
-
-  // TODO: remove; for debugging purposes only
-  printk(KERN_INFO "X Y: %i %i", data[3], data[5]);
-
-  input_report_key(input, ABS_PRESSURE, data[6]);
+  input_report_abs(input, ABS_X, (data[3] << 8) | (unsigned char) data[2]);
+  input_report_abs(input, ABS_Y, (data[5] << 8) | (unsigned char) data[4]);
+  input_report_abs(input, ABS_PRESSURE, (data[7] << 8) | (unsigned char) data[6]);
 
   if(veikk_vei->pen_input)
     input_sync(veikk_vei->pen_input);
@@ -73,19 +67,17 @@ static void veikk_close(struct input_dev *dev) {
 int veikk_setup_pen_input_capabilities(struct input_dev *input_dev, struct veikk_vei *veikk_vei) {
   input_dev->evbit[0] |= BIT_MASK(EV_KEY) | BIT_MASK(EV_ABS);
 
-  //__set_bit(INPUT_PROP_DIRECT, input_dev->propbit);
    __set_bit(INPUT_PROP_POINTER, input_dev->propbit);
 
   __set_bit(BTN_TOUCH, input_dev->keybit);
   __set_bit(BTN_STYLUS, input_dev->keybit);
   __set_bit(BTN_STYLUS2, input_dev->keybit);
-  __set_bit(ABS_MISC, input_dev->absbit);
 
   input_set_abs_params(input_dev, ABS_X, 0, 32767, 0, 0);
   input_set_abs_params(input_dev, ABS_Y, 0, 32767, 0, 0);
   input_set_abs_params(input_dev, ABS_PRESSURE, 0, 8191, 0, 0);
-  input_abs_set_res(input_dev, ABS_X, 100);
-  input_abs_set_res(input_dev, ABS_Y, 100);
+  input_abs_set_res(input_dev, ABS_X, 25);
+  input_abs_set_res(input_dev, ABS_Y, 25);
 
   return 0;
 }
@@ -93,7 +85,6 @@ int veikk_setup_touch_input_capabilities(struct input_dev *input_dev, struct vei
 
   input_dev->evbit[0] |= BIT_MASK(EV_KEY) | BIT_MASK(EV_ABS);
 
-  //__set_bit(INPUT_PROP_DIRECT, input_dev->propbit);
   __set_bit(INPUT_PROP_POINTER, input_dev->propbit);
 
   __set_bit(BTN_TOUCH, input_dev->keybit);
@@ -108,7 +99,6 @@ int veikk_setup_touch_input_capabilities(struct input_dev *input_dev, struct vei
 static struct input_dev *veikk_allocate_input(struct veikk *veikk) {
   struct input_dev *input_dev;
   struct hid_device *hdev = veikk->hdev;
-  // struct veikk_vei *veikk_vei = &(veikk->veikk_vei);
 
   input_dev = devm_input_allocate_device(&hdev->dev);
   if(!input_dev)
@@ -153,7 +143,6 @@ static int veikk_register_inputs(struct veikk *veikk) {
   touch_input_dev = veikk_vei->touch_input;
   pad_input_dev = veikk_vei->pad_input;
 
-  // TODO: is there a pen on this thing?
   error = veikk_setup_pen_input_capabilities(pen_input_dev, veikk_vei);
   if(error) {
     input_free_device(pen_input_dev);
@@ -166,6 +155,7 @@ static int veikk_register_inputs(struct veikk *veikk) {
   }
   
   // TODO: is there a touch on this thing?
+  // I don't think this is being used rn
   error = veikk_setup_touch_input_capabilities(touch_input_dev, veikk_vei);
   if(error) {
     input_free_device(touch_input_dev);
@@ -178,7 +168,7 @@ static int veikk_register_inputs(struct veikk *veikk) {
   }
 
   // TODO: is there a pad on this thing?
-  // I think not? (i.e., no pad buttons)
+  // I don't think this is being used rn
   input_free_device(pad_input_dev);
   veikk_vei->pad_input = NULL;
   pad_input_dev = NULL;
@@ -193,7 +183,6 @@ fail:
   return error;
 }
 static int veikk_parse_and_register(struct veikk *veikk) {
-  // struct veikk_vei *veikk_vei = &veikk->veikk_vei;
   struct hid_device *hdev = veikk->hdev;
   int error;
   unsigned int connect_mask = HID_CONNECT_HIDRAW;
@@ -204,21 +193,10 @@ static int veikk_parse_and_register(struct veikk *veikk) {
   error = veikk_allocate_inputs(veikk);
   if(error)
     goto fail;
-  
-  // wacom_set_default_phy(features)
-  
-  // wacom_retrieve_hid_descriptor(hdev, features)
-  // wacom_setup_device_quirks
-
-  // wacom_calculate_res
-
-  // error = wacom_add_shared_data(hdev)
 
   error = veikk_register_inputs(veikk);
   if(error)
     goto fail;
-  
-  // connect_mask |= HID_CONNECT_DRIVER;
   
   error = hid_hw_start(hdev, connect_mask);
   if(error) {
@@ -226,15 +204,11 @@ static int veikk_parse_and_register(struct veikk *veikk) {
     goto fail;
   }
 
-  // wacom_query_tablet_data
-
-  // wacom_set_shared_values
   devres_close_group(&hdev->dev, veikk);
 
   return 0;
 
 fail:
-  // wacom_release_resources
   printk(KERN_WARNING "Error from veikk_parse_and_register(): %i", error);
   return error;
 }
@@ -296,51 +270,16 @@ static void veikk_remove(struct hid_device *hdev) {
 
 	hid_set_drvdata(hdev, NULL);
 }
-static void veikk_report(struct hid_device *hdev, struct hid_report *report) {
-  printk(KERN_INFO "Inside veikk_report()");
-}
 static int veikk_raw_event(struct hid_device *hdev, struct hid_report *report, u8 *raw_data, int size) {
   struct veikk *veikk = hid_get_drvdata(hdev);
-
-  /*int i, s;     // TODO: remove later, just for debugging
-  unsigned char dataString[size * 9 + 1];*/
-
-  /* printk(KERN_INFO "Inside veikk_raw_event()"); */
 
 	if (size > VEIKK_PKGLEN_MAX)
 		return 1;
 
 	memcpy(veikk->veikk_vei.data, raw_data, size);
 
-  // DATA DEBUGGING
-  //printk(KERN_INFO "DATA: %s", veikk->veikk_vei.data);
-  //printk(KERN_INFO "u8 size: %lu", sizeof(u8));
-  //printk(KERN_INFO "DATASIZE: %i", size);
-  /*for(i = 0; i < size; i++) {
-    s = 9 * i;
-    dataString[s + 0] = '0' + !!(raw_data[i] & 0x80);
-    dataString[s + 1] = '0' + !!(raw_data[i] & 0x40);
-    dataString[s + 2] = '0' + !!(raw_data[i] & 0x20);
-    dataString[s + 3] = '0' + !!(raw_data[i] & 0x10);
-    dataString[s + 4] = '0' + !!(raw_data[i] & 0x08);
-    dataString[s + 5] = '0' + !!(raw_data[i] & 0x04);
-    dataString[s + 6] = '0' + !!(raw_data[i] & 0x02);
-    dataString[s + 7] = '0' + !!(raw_data[i] & 0x01);
-    dataString[s + 8] = ' ';
-  }
-  dataString[9 * i] = '\0';
-  printk(KERN_INFO "DATA: %s", dataString);
-  printk(KERN_INFO "0thB: %i", raw_data[0]);
-  printk(KERN_INFO "1thB: %i", raw_data[1]);
-  printk(KERN_INFO "2thB: %i", raw_data[2]);
-  printk(KERN_INFO "3thB: %i", raw_data[3]);
-  printk(KERN_INFO "4thB: %i", raw_data[4]);
-  printk(KERN_INFO "5thB: %i", raw_data[5]);
-  printk(KERN_INFO "6thB: %i", raw_data[6]);
-  printk(KERN_INFO "7thB: %i", raw_data[7]);*/
+  veikk_vei_irq(&veikk->veikk_vei, size);
 
-	veikk_vei_irq(&veikk->veikk_vei, size);
-  
   return 0;
 }
 
@@ -349,7 +288,6 @@ static struct hid_driver veikk_driver = {
   .id_table   = id_table,
   .probe      = veikk_probe,
   .remove     = veikk_remove,
-  .report     = veikk_report,
   .raw_event  = veikk_raw_event
 };
 module_hid_driver(veikk_driver);
