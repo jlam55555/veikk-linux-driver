@@ -16,7 +16,7 @@ struct veikk_vei {
   struct input_dev *touch_input;
   struct input_dev *pad_input;
   struct kfifo_rec_ptr_2 pen_fifo;
-}
+};
 
 // struct to hold driver data
 struct veikk {
@@ -33,6 +33,17 @@ static const struct hid_device_id id_table[] = {
 MODULE_DEVICE_TABLE(hid, id_table);
 
 // other functions
+static int veikk_open(struct input_dev *dev) {
+  struct veikk *veikk = input_get_drvdata(dev);
+
+  return hid_hw_open(veikk->hdev);
+}
+static void veikk_close(struct input_dev *dev) {
+  struct veikk *veikk = input_get_drvdata(dev);
+
+  if(veikk->hdev)
+    hid_hw_close(veikk->hdev);
+}
 int veikk_setup_pen_input_capabilities(struct input_dev *input_dev, struct veikk_vei *veikk_vei) {
   input_dev->evbit[0] |= BIT_MASK(EV_KEY) | BIT_MASK(EV_ABS);
 
@@ -69,7 +80,7 @@ int veikk_setup_touch_input_capabilities(struct input_dev *input_dev, struct vei
 static struct input_dev *veikk_allocate_input(struct veikk *veikk) {
   struct input_dev *input_dev;
   struct hid_device *hdev = veikk->hdev;
-  struct veikk_vei *veikk_vei = &(veikk->veikk_vei);
+  // struct veikk_vei *veikk_vei = &(veikk->veikk_vei);
 
   input_dev = devm_input_allocate_device(&hdev->dev);
   if(!input_dev)
@@ -147,14 +158,14 @@ static int veikk_register_inputs(struct veikk *veikk) {
   return 0;
 
 fail:
-  printk(KERN_WARN "Error from veikk_register_inputs(): %i", error);
+  printk(KERN_WARNING "Error from veikk_register_inputs(): %i", error);
   veikk_vei->pen_input = NULL;
   veikk_vei->touch_input = NULL;
   veikk_vei->pad_input = NULL;
   return error;
 }
 static int veikk_parse_and_register(struct veikk *veikk) {
-  struct veikk_vei *veikk_vei = &veikk->veikk_vei;
+  // struct veikk_vei *veikk_vei = &veikk->veikk_vei;
   struct hid_device *hdev = veikk->hdev;
   int error;
   unsigned int connect_mask = HID_CONNECT_HIDRAW;
@@ -194,18 +205,19 @@ static int veikk_parse_and_register(struct veikk *veikk) {
 
 fail:
   // wacom_release_resources
-  printk(KERN_WARN "Error from veikk_parse_and_register(): %i", error);
+  printk(KERN_WARNING "Error from veikk_parse_and_register(): %i", error);
   return error;
 }
 
 // module functions
 static int veikk_probe(struct hid_device *hdev, const struct hid_device_id *id) {
-  printk(KERN_INFO "Inside veikk_probe()");
   struct usb_interface *intf = to_usb_interface(hdev->dev.parent);
   struct usb_device *dev = interface_to_usbdev(intf);
   struct veikk *veikk;
   struct veikk_vei *veikk_vei;
   int error;
+
+  printk(KERN_INFO "Inside veikk_probe()");
   
   if(!id->driver_data)
     return -EINVAL;
@@ -241,15 +253,15 @@ static int veikk_probe(struct hid_device *hdev, const struct hid_device_id *id) 
 
 fail:
   hid_set_drvdata(hdev, NULL);
-  printk(KERN_WARN "Error in veikk_probe(): %i");
+  printk(KERN_WARNING "Error in veikk_probe(): %i", error);
   return error;
 
 }
 static void veikk_remove(struct hid_device *hdev) {
-  printk(KERN_INFO "Inside veikk_remove()");
-
   struct veikk *veikk = hid_get_drvdata(hdev);
 	struct veikk_vei *veikk_vei = &veikk->veikk_vei;
+
+  printk(KERN_INFO "Inside veikk_remove()");
 
 	hid_hw_stop(hdev);
 
