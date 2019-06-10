@@ -16,7 +16,7 @@ Right now, `hid-generic` seems to want to gobble up the driver the moment it's p
 
     sudo cat -n "xxxx:2FEB:0001.xxxx" > /sys/bus/hid/drivers/hid-generic/unload
 
-replacing the `x`s with the corresponding values from `ls /sys/bus/hid/devices`. (`2FEB:0001` is the vendor ID, product ID of the S640 product.)
+replacing the `x`s with the corresponding values from `ls /sys/bus/hid/devices`. (`2FEB:0001` is the vendor ID, product ID of the S640 product.) If this is successful, running `ls /sys/bus/hid/drivers/veikk` should list the Veikk S640 device.
 
 ---
 
@@ -25,6 +25,7 @@ replacing the `x`s with the corresponding values from `ls /sys/bus/hid/devices`.
 Compile using the `Makefile`.
 
     ./build.sh
+
 
 ---
 
