@@ -247,6 +247,15 @@ fail:
 }
 static void veikk_remove(struct hid_device *hdev) {
   printk(KERN_INFO "Inside veikk_remove()");
+
+  struct veikk *veikk = hid_get_drvdata(hdev);
+	struct veikk_vei *veikk_vei = &veikk->veikk_vei;
+
+	hid_hw_stop(hdev);
+
+	kfifo_free(&veikk_vei->pen_fifo);
+
+	hid_set_drvdata(hdev, NULL);
 }
 static void veikk_report(struct hid_device *hdev, struct hid_report *report) {
   printk(KERN_INFO "Inside veikk_report()");
