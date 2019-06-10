@@ -73,6 +73,7 @@ int veikk_setup_pen_input_capabilities(struct input_dev *input_dev, struct veikk
   __set_bit(BTN_STYLUS, input_dev->keybit);
   __set_bit(BTN_STYLUS2, input_dev->keybit);
 
+  // TODO: these are hardcoded to fit the S640, adjust for later
   input_set_abs_params(input_dev, ABS_X, 0, 32767, 0, 0);
   input_set_abs_params(input_dev, ABS_Y, 0, 32767, 0, 0);
   input_set_abs_params(input_dev, ABS_PRESSURE, 0, 8191, 0, 0);
