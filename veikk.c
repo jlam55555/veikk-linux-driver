@@ -31,6 +31,8 @@ struct veikk {
 
 static const struct hid_device_id id_table[] = {
   { HID_USB_DEVICE(0x2feb, 0x0001) },
+  // TODO: confirm that 0x0002 is indeed the product ID for the A30
+  { HID_USB_DEVICE(0x2feb, 0x0002) },
   { HID_USB_DEVICE(0x2feb, 0x0003) },
   { }
 };
