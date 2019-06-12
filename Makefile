@@ -16,5 +16,5 @@ install:
 
 uninstall:
 	modprobe -r $(MOD_NAME)
-	rm $(BUILD_DIR)/extra/$(MOD_NAME).ko
+	rm $(BUILD_DIR)/extra/$(MOD_NAME).ko*
 	depmod
