@@ -1,6 +1,6 @@
 # Veikk S640 Drawing Tablet driver for Linux
 
-![5][Veikk S640 Tablet Driver "Hello World" with GIMP and Krita]
+![Veikk S640 Tablet Driver "Hello World" with GIMP and Krita][5]
 
 v1.0
 
