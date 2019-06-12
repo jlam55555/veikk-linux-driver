@@ -31,6 +31,7 @@ struct veikk {
 
 static const struct hid_device_id id_table[] = {
   { HID_USB_DEVICE(0x2feb, 0x0001) },
+  { HID_USB_DEVICE(0x2feb, 0x0003) },
   { }
 };
 MODULE_DEVICE_TABLE(hid, id_table);
