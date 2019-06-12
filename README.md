@@ -24,6 +24,8 @@ replacing the `x`s with the corresponding values from `ls /sys/bus/hid/devices`.
 
 ### Install instructions
 
+Make sure you have `make` and the appropriate linux headers installed (`linux-headers-$(uname -r)` on Ubuntu, `linux-headers` on Arch). See [this][3] for more details.
+
     make
     sudo make install clean
 
@@ -53,3 +55,4 @@ I am also not an artist. My sister is the artist, and this is her tablet. If any
 [0]: http://www.veikk.com/s640/
 [1]: https://github.com/torvalds/linux/blob/master/drivers/hid/wacom_wac.c
 [2]: http://www.veikk.com/pen-tablet/
+[3]: https://askubuntu.com/questions/554624/how-to-resolve-the-lib-modules-3-13-0-27-generic-build-no-such-file-or-direct

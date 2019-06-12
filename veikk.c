@@ -10,16 +10,18 @@
 
 #define VEIKK_PKGLEN_MAX  361
 
-// struct for something else?
+// struct for user interface
 struct veikk_vei {
   struct input_dev *pen_input;
   struct input_dev *touch_input;
   struct input_dev *pad_input;
+  // TODO: can this be deleted? what is pen_fifo for?
+  //  will delete when able to test
   struct kfifo_rec_ptr_2 pen_fifo;
   unsigned char data[VEIKK_PKGLEN_MAX];
 };
 
-// struct to hold driver data
+// struct for hardware interface
 struct veikk {
   struct usb_device *usbdev;
   struct usb_interface *intf;
@@ -77,6 +79,8 @@ int veikk_setup_pen_input_capabilities(struct input_dev *input_dev, struct veikk
   input_set_abs_params(input_dev, ABS_X, 0, 32767, 0, 0);
   input_set_abs_params(input_dev, ABS_Y, 0, 32767, 0, 0);
   input_set_abs_params(input_dev, ABS_PRESSURE, 0, 8191, 0, 0);
+
+  // TODO: what does this value do? Should it be set to 1?
   input_abs_set_res(input_dev, ABS_X, 25);
   input_abs_set_res(input_dev, ABS_Y, 25);
 
@@ -125,6 +129,7 @@ static struct input_dev *veikk_allocate_input(struct veikk *veikk) {
 static int veikk_allocate_inputs(struct veikk *veikk) {
   struct veikk_vei *veikk_vei = &(veikk->veikk_vei);
 
+  // right now only a pen is used (S640 only uses pen events; touch and pad don't do anything)
   veikk_vei->pen_input = veikk_allocate_input(veikk);
   veikk_vei->touch_input = veikk_allocate_input(veikk);
   veikk_vei->pad_input = veikk_allocate_input(veikk);
