@@ -57,8 +57,8 @@ I am also not an artist. My sister is the artist, and this is her tablet. If any
 [1]: https://github.com/torvalds/linux/blob/master/drivers/hid/wacom_wac.c
 [2]: http://www.veikk.com/pen-tablet/
 [3]: https://askubuntu.com/questions/554624/how-to-resolve-the-lib-modules-3-13-0-27-generic-build-no-such-file-or-direct
-[4]: https://eis.jonlamdev.com/posts/on-developing-a-linux-driver
-[5]: https://eis.jonlamdev.com/res/img/headers/on-developing-a-linux-driver.jpg
+[4]: http://eis.jonlamdev.com/posts/on-developing-a-linux-driver
+[5]: http://eis.jonlamdev.com/res/img/headers/on-developing-a-linux-driver.jpg
 [6]: https://support.displaylink.com/knowledgebase/articles/1181617-how-to-use-displaylink-ubuntu-driver-with-uefi-sec
 [7]: https://github.com/jlam55555/veikk-s640-driver/issues/3
 [8]: https://github.com/jlam55555/veikk-s640-driver/issues
