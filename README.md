@@ -1,10 +1,14 @@
 # Veikk S640 Drawing Tablet driver for Linux
 
+![5][Veikk S640 Tablet Driver "Hello World" with GIMP and Krita]
+
 v1.0
 
 A simple driver for the [Veikk S640 drawing tablet][0], using the `usbhid` HID API. This draws heavily off of the [Wacom driver][1], and is simplified to tailor to the S640's capabilities.
 
 The driver interfaces (absolute) cursor movement, pressure sensitivity, and the two stylus buttons. Full 32768x32768 cursor position sensitivity and 8192-level pressure sensitivity are included.
+
+I also [wrote a blog post][4] about the development of this driver, which also acts as a no-prior-knowledge-necessary tutorial for writing Linux drivers. Check it out!
 
 ---
 
@@ -41,6 +45,14 @@ Make sure you have `make` and the appropriate linux headers installed (`linux-he
 
 - Visual configuration interface (e.g., pressure sensitivity mapping)
 - Integration for more Veikk devices
+- Signing the module to allow with Safe Boot enabled
+
+---
+
+### Known issues
+
+- The module is unsigned -- you may have [to turn off Safe Boot][6] to allow this to work.
+- There are known problems with `hid-generic` on kernel 4.15. If that is the case, try the extra instructions under "Setup Instructions" or try installing a kernel version 4.18+ (e.g., using [Ukuu][7]).
 
 ---
 
@@ -56,3 +68,7 @@ I am also not an artist. My sister is the artist, and this is her tablet. If any
 [1]: https://github.com/torvalds/linux/blob/master/drivers/hid/wacom_wac.c
 [2]: http://www.veikk.com/pen-tablet/
 [3]: https://askubuntu.com/questions/554624/how-to-resolve-the-lib-modules-3-13-0-27-generic-build-no-such-file-or-direct
+[4]: https://everything-is-sheep.herokuapp.com/posts/on-developing-a-linux-driver
+[5]: https://everything-is-sheep.herokuapp.com/res/img/headers/on-developing-a-linux-driver.jpg
+[6]: https://support.displaylink.com/knowledgebase/articles/1181617-how-to-use-displaylink-ubuntu-driver-with-uefi-sec
+[7]: https://vitux.com/update-linux-kernel-on-ubuntu-through-ukuu/
