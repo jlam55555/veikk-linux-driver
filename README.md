@@ -25,7 +25,7 @@ replacing the `x`s with the corresponding values from `ls /sys/bus/hid/devices`.
 ### Install instructions
 
     make
-    sudo make install
+    sudo make install clean
 
 ---
 
