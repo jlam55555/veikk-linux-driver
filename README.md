@@ -16,6 +16,8 @@ I also [wrote a blog post][4] about the development of this driver, which also a
 
 ### Setup instructions
 
+**Arch users**: [input-veikk-dkms<sup>AUR</sup>][10], thanks to [@artixnous][11]
+
 Run the install instructions, and the driver should be set up! Woo hoo!
 
 Check out the [issues tab][9] for known setup issues and solutions.
@@ -64,3 +66,5 @@ I am also not an artist. My sister is the artist, and this is her tablet. If any
 [7]: https://github.com/jlam55555/veikk-s640-driver/issues/3
 [8]: https://github.com/jlam55555/veikk-s640-driver/issues
 [9]: https://github.com/jlam55555/veikk-s640-driver/pull/1
+[10]: https://aur.archlinux.org/packages/input-veikk-dkms/
+[11]: https://github.com/artixnous
