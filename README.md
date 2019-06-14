@@ -29,6 +29,8 @@ Make sure you have `make` and the appropriate linux headers installed (`linux-he
     make
     sudo make install clean
 
+If you are getting a `Required key not available` error, please see [this issue][7].
+
 ---
 
 ### Uninstall instructions
@@ -41,7 +43,6 @@ Make sure you have `make` and the appropriate linux headers installed (`linux-he
 
 - Visual configuration interface (e.g., pressure sensitivity mapping)
 - Integration for more Veikk devices
-- Signing the module to allow with Safe Boot enabled (See [this issue][7])
 
 ---
 
