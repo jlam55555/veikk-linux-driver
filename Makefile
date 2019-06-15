@@ -11,6 +11,7 @@ clean:
 
 install:
 	make -C $(BUILD_DIR) M=$(CURDIR) modules_install
+	depmod
 	modprobe veikk
 
 uninstall:
