@@ -5,6 +5,7 @@ obj-m := $(MOD_NAME).o
 
 all:
 	make -C $(BUILD_DIR) M=$(CURDIR) modules
+	chmod +x ./config.sh
 
 clean:
 	make -C $(BUILD_DIR) M=$(CURDIR) clean

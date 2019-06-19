@@ -2,5 +2,6 @@
 
 !veikk.c
 !.gitignore
+!config.sh
 !README.md
 !Makefile

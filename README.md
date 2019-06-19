@@ -6,7 +6,7 @@ v1.0
 
 **Note**: Pen capabilities may also work on the Veikk A30 and A50 as it is identical to the S640, but the author of this repo does not own these devices to verify. Additional capabilities for other devices  (e.g., tablet buttons) have yet to be added.
 
-A simple driver for the [Veikk S640 drawing tablet][0], using the `usbhid` HID API. This draws heavily off of the [Wacom driver][1], and is simplified to tailor to the S640's capabilities.
+A simple driver for the [Veikk S640 drawing tablet][0], using the `usbhid` HID API. This draws heavily off of the [Wacom driver][1], and is simplified to tailor to the S640's capabilities. The configuration utility uses the `sysfs` interface.
 
 The driver interfaces (absolute) cursor movement, pressure sensitivity, and the two stylus buttons. Full 32768x32768 cursor position sensitivity and 8192-level pressure sensitivity are included.
 
@@ -41,10 +41,37 @@ If you are getting a `Required key not available` error, please see [this issue]
 
 ---
 
+### Configuration (very beta)
+
+Run the configuration utility and follow the instructions to change a setting. Note that this is very beta, so input validation doesn't exist yet and data will not be saved after reloading the module or restarting. Those updates will come with the visual configuration utility.
+
+    ./config.sh
+
+Configuration options:
+
+- Orientation:
+    - `0`: no rotation (default) 
+    - `1`: rotate right 90 deg
+    - `2`: rotate 180 deg (left-handed mode)
+    - `3`: rotate left 90 deg
+- Screen mapping (all values in integers percents, e.g., `45`):
+    - Left: left boundary (default: `0`)
+    - Top: top boundary (default: `0`)
+    - Right: right boundary (default: `100`)
+    - Bottom: bottom boundary (default: `100`)
+- Pressure mapping:
+    - `0`: linear mapping (`p_out = p_raw`) (default)
+    - `1`: constant function, half pressure (`p_out = p_max / 2`)
+    - `2`: power function, `n=1/2` (`p_out = sqrt(p_raw)`)
+    - `3`: power function, `n=2` (`p_out = p_raw^2`)
+    - `4`: linear mapping, reduced input pressure (`p_out = min(4/3 * p_raw, p_max)`)
+
+---
+
 ### Future updates
 
 - Visual configuration interface (e.g., pressure sensitivity mapping)
-- Integration for more Veikk devices
+- Integration for more Veikk devices (A15, A30, A50, VK1560)
 
 ---
 
