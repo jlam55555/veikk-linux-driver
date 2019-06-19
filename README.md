@@ -2,7 +2,7 @@
 
 ![Veikk S640 Tablet Driver "Hello World" with GIMP and Krita][5]
 
-v1.0
+v1.1
 
 **Note**: Pen capabilities may also work on the Veikk A30 and A50 as it is identical to the S640, but the author of this repo does not own these devices to verify. Additional capabilities for other devices  (e.g., tablet buttons) have yet to be added.
 
