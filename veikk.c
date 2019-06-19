@@ -13,8 +13,16 @@
 
 // module parameters for the configuration utility
 // located in sysfs parameters (/sys/module/veikk/parameters)
+// see the README for more information
 static int orientation = 0;
 module_param(orientation, int, 0660);
+
+static int bounds_map[4] = { 0, 0, 100, 100 };
+static int count;
+module_param_array(bounds_map, int, &count, 0660);
+
+static int pressure_map = 0;
+module_param(pressure_map, int, 0660);
 
 // struct for user interface
 struct veikk_vei {
@@ -48,39 +56,74 @@ MODULE_DEVICE_TABLE(hid, id_table);
 void veikk_vei_irq(struct veikk_vei *veikk_vei, size_t len) {
   char *data = veikk_vei->data;
   struct input_dev *input = veikk_vei->pen_input;
-  unsigned int x_out, x_raw, y_out, y_raw;
+  unsigned int x_out, x_raw, y_out, y_raw, pressure_out, pressure_raw;
 
   input_report_key(input, BTN_TOUCH, (data[1] & 0x01));
   input_report_key(input, BTN_STYLUS, (data[1] & 0x02));
   input_report_key(input, BTN_STYLUS2, (data[1] & 0x04));
 
-  // calculate x and y positions
+  // calculate x, y, and pressure given parameters
+  // orientation map
   x_raw = (data[3] << 8) | (unsigned char) data[2];
   y_raw = (data[5] << 8) | (unsigned char) data[4];
   switch(orientation) {
+    // rotate right
     case 1:
       x_out = 32767 - y_raw;
       y_out = x_raw;
       break;
+    // rotate 180
     case 2:
       x_out = 32767 - x_raw;
       y_out = 32767 - y_raw;
       break;
+    // rotate left
     case 3:
       x_out = y_raw;
       y_out = 32767 - x_raw;
       break;
-    case 0:
+    // default rotation
     default:
-      // no transformation
+    case 0:
       x_out = x_raw;
       y_out = y_raw;
+  }
+
+  // map to section of screen
+  // right now bounds_map are in percents, so awkward calculation
+  x_out = (x_out * (bounds_map[2] - bounds_map[0]) + 32767 * bounds_map[0]) / 100;
+  y_out = (y_out * (bounds_map[3] - bounds_map[1]) + 32767 * bounds_map[1]) / 100;
+
+  // pressure mapping
+  // right now only hardcoded functions
+  pressure_raw = (data[7] << 8) | (unsigned char) data[6];
+  switch(pressure_map) {
+    // constant function
+    case 1:
+      pressure_out = pressure_raw ? 4095 : 0;
       break;
+    // power function (n=1/2, sqrt)
+    case 2:
+      // 90 is approx. sqrt(8192)
+      pressure_out = 90 * int_sqrt(pressure_raw);
+      break;
+    // power function (n=2, square)
+    case 3:
+      pressure_out = pressure_raw * pressure_raw / 8191;
+      break;
+    // linear mapping (reduced intensity for full pressure, suggested by @artixnous)
+    case 4:
+      pressure_out = (pressure_raw < 6144) ? 4 * pressure_raw / 3 : 8191;
+      break;
+    // linear mapping
+    case 0:
+    default:
+      pressure_out = pressure_raw;
   }
 
   input_report_abs(input, ABS_X, x_out);
   input_report_abs(input, ABS_Y, y_out);
-  input_report_abs(input, ABS_PRESSURE, (data[7] << 8) | (unsigned char) data[6]);
+  input_report_abs(input, ABS_PRESSURE, pressure_out);
 
   if(veikk_vei->pen_input)
     input_sync(veikk_vei->pen_input);
