@@ -1,4 +1,5 @@
 #include <linux/module.h>
+#include <linux/moduleparam.h>
 #include <linux/slab.h>
 #include <linux/mod_devicetable.h>
 #include <linux/hid.h>
@@ -9,6 +10,11 @@
 #include <asm/unaligned.h>
 
 #define VEIKK_PKGLEN_MAX  361
+
+// module parameters for the configuration utility
+// located in sysfs parameters (/sys/module/veikk/parameters)
+static int orientation = 0;
+module_param(orientation, int, 0660);
 
 // struct for user interface
 struct veikk_vei {
@@ -42,13 +48,38 @@ MODULE_DEVICE_TABLE(hid, id_table);
 void veikk_vei_irq(struct veikk_vei *veikk_vei, size_t len) {
   char *data = veikk_vei->data;
   struct input_dev *input = veikk_vei->pen_input;
+  unsigned int x_out, x_raw, y_out, y_raw;
 
   input_report_key(input, BTN_TOUCH, (data[1] & 0x01));
   input_report_key(input, BTN_STYLUS, (data[1] & 0x02));
   input_report_key(input, BTN_STYLUS2, (data[1] & 0x04));
 
-  input_report_abs(input, ABS_X, (data[3] << 8) | (unsigned char) data[2]);
-  input_report_abs(input, ABS_Y, (data[5] << 8) | (unsigned char) data[4]);
+  // calculate x and y positions
+  x_raw = (data[3] << 8) | (unsigned char) data[2];
+  y_raw = (data[5] << 8) | (unsigned char) data[4];
+  switch(orientation) {
+    case 1:
+      x_out = 32767 - y_raw;
+      y_out = x_raw;
+      break;
+    case 2:
+      x_out = 32767 - x_raw;
+      y_out = 32767 - y_raw;
+      break;
+    case 3:
+      x_out = y_raw;
+      y_out = 32767 - x_raw;
+      break;
+    case 0:
+    default:
+      // no transformation
+      x_out = x_raw;
+      y_out = y_raw;
+      break;
+  }
+
+  input_report_abs(input, ABS_X, x_out);
+  input_report_abs(input, ABS_Y, y_out);
   input_report_abs(input, ABS_PRESSURE, (data[7] << 8) | (unsigned char) data[6]);
 
   if(veikk_vei->pen_input)
@@ -72,7 +103,7 @@ static void veikk_close(struct input_dev *dev) {
 int veikk_setup_pen_input_capabilities(struct input_dev *input_dev, struct veikk_vei *veikk_vei) {
   input_dev->evbit[0] |= BIT_MASK(EV_KEY) | BIT_MASK(EV_ABS);
 
-   __set_bit(INPUT_PROP_POINTER, input_dev->propbit);
+  __set_bit(INPUT_PROP_DIRECT, input_dev->propbit);
 
   __set_bit(BTN_TOUCH, input_dev->keybit);
   __set_bit(BTN_STYLUS, input_dev->keybit);
@@ -83,9 +114,10 @@ int veikk_setup_pen_input_capabilities(struct input_dev *input_dev, struct veikk
   input_set_abs_params(input_dev, ABS_Y, 0, 32767, 0, 0);
   input_set_abs_params(input_dev, ABS_PRESSURE, 0, 8191, 0, 0);
 
-  // TODO: what does this value do? Should it be set to 1?
-  input_abs_set_res(input_dev, ABS_X, 25);
-  input_abs_set_res(input_dev, ABS_Y, 25);
+  // TODO: what does this value do? What should it be set to?
+  //       I've seen 25, 100 as values; all seem to work equally well
+  input_abs_set_res(input_dev, ABS_X, 1);
+  input_abs_set_res(input_dev, ABS_Y, 1);
 
   return 0;
 }
