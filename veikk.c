@@ -11,6 +11,17 @@
 
 #define VEIKK_PKGLEN_MAX  361
 
+// you can "configure" these to be other buttons,
+// or even keyboard keys KEY_A etc.
+#define VEIKK_BTN_0 BTN_0
+#define VEIKK_BTN_1 BTN_1
+#define VEIKK_BTN_2 BTN_2
+#define VEIKK_BTN_3 BTN_3
+#define VEIKK_BTN_4 BTN_4
+#define VEIKK_BTN_5 BTN_5
+#define VEIKK_BTN_6 BTN_6
+#define VEIKK_BTN_7 BTN_7
+
 // module parameters for the configuration utility
 // located in sysfs parameters (/sys/module/veikk/parameters)
 // see the README for more information
@@ -57,6 +68,23 @@ void veikk_vei_irq(struct veikk_vei *veikk_vei, size_t len) {
   char *data = veikk_vei->data;
   struct input_dev *input = veikk_vei->pen_input;
   unsigned int x_out, x_raw, y_out, y_raw, pressure_out, pressure_raw;
+  if (data[0] & 0x02) {
+    // side buttons on A50
+    // from top-left
+
+    input_report_key(input, VEIKK_BTN_0, data[2] == 62 && !(data[1] & 0x01));
+    input_report_key(input, VEIKK_BTN_1, data[2] == 12 && !(data[1] & 0x01));
+    input_report_key(input, VEIKK_BTN_2, data[2] == 44 && !(data[1] & 0x01));
+    input_report_key(input, VEIKK_BTN_3, data[2] == 25 && !(data[1] & 0x01));
+
+    input_report_key(input, VEIKK_BTN_4, data[2] == 6 && (data[1] & 0x01));
+    input_report_key(input, VEIKK_BTN_5, data[2] == 25 && (data[1] & 0x01));
+    input_report_key(input, VEIKK_BTN_6, data[2] == 29 && (data[1] & 0x01));
+    input_report_key(input, VEIKK_BTN_7, data[2] == 22 && (data[1] & 0x01));
+
+    input_sync(input);
+    return;
+  }
 
   input_report_key(input, BTN_TOUCH, (data[1] & 0x01));
   input_report_key(input, BTN_STYLUS, (data[1] & 0x02));
@@ -143,7 +171,7 @@ static void veikk_close(struct input_dev *dev) {
   if(veikk->hdev)
     hid_hw_close(veikk->hdev);
 }
-int veikk_setup_pen_input_capabilities(struct input_dev *input_dev, struct veikk_vei *veikk_vei) {
+int veikk_setup_pen_input_capabilities(struct input_dev *input_dev, struct veikk_vei *veikk_vei, int extra_buttons) {
   input_dev->evbit[0] |= BIT_MASK(EV_KEY) | BIT_MASK(EV_ABS);
 
   __set_bit(INPUT_PROP_DIRECT, input_dev->propbit);
@@ -151,6 +179,17 @@ int veikk_setup_pen_input_capabilities(struct input_dev *input_dev, struct veikk
   __set_bit(BTN_TOUCH, input_dev->keybit);
   __set_bit(BTN_STYLUS, input_dev->keybit);
   __set_bit(BTN_STYLUS2, input_dev->keybit);
+
+  if (extra_buttons) {
+    __set_bit(VEIKK_BTN_0, input_dev->keybit);
+    __set_bit(VEIKK_BTN_1, input_dev->keybit);
+    __set_bit(VEIKK_BTN_2, input_dev->keybit);
+    __set_bit(VEIKK_BTN_3, input_dev->keybit);
+    __set_bit(VEIKK_BTN_4, input_dev->keybit);
+    __set_bit(VEIKK_BTN_5, input_dev->keybit);
+    __set_bit(VEIKK_BTN_6, input_dev->keybit);
+    __set_bit(VEIKK_BTN_7, input_dev->keybit);
+  }
 
   // TODO: these are hardcoded to fit the S640, adjust for later
   input_set_abs_params(input_dev, ABS_X, 0, 32767, 0, 0);
@@ -215,7 +254,13 @@ static int veikk_allocate_inputs(struct veikk *veikk) {
   if(!veikk_vei->pen_input || !veikk_vei->touch_input || !veikk_vei->pad_input)
     return -ENOMEM;
 
-  veikk_vei->pen_input->name = "Veikk S640 Pen";
+  if (veikk->hdev->product == 0x0003) {
+    veikk_vei->pen_input->name = "Veikk A50 Pen";
+  } else if (veikk->hdev->product == 0x0002) {
+    veikk_vei->pen_input->name = "Veikk A30 Pen";
+  } else {
+    veikk_vei->pen_input->name = "Veikk S640 Pen";
+  }
   veikk_vei->touch_input->name = "Veikk Touch";
   veikk_vei->pad_input->name = "Veikk Pad";
 
@@ -230,7 +275,7 @@ static int veikk_register_inputs(struct veikk *veikk) {
   touch_input_dev = veikk_vei->touch_input;
   pad_input_dev = veikk_vei->pad_input;
 
-  error = veikk_setup_pen_input_capabilities(pen_input_dev, veikk_vei);
+  error = veikk_setup_pen_input_capabilities(pen_input_dev, veikk_vei, veikk->hdev->product == 0x0003);
   if(error) {
     input_free_device(pen_input_dev);
     veikk_vei->pen_input = NULL;
