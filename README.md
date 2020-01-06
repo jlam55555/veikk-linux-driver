@@ -26,8 +26,8 @@ for more details.
     make
     sudo make all install clean
     
-If you are getting a `Required key not available` error, please see [this issue]
-[6].
+If you are getting a `Required key not available` error, please see
+[this issue][6].
 
 Check out the [issues tab][5] for known setup issues and solutions.
 
