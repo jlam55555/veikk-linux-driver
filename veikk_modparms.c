@@ -72,8 +72,8 @@ static const struct kernel_param_ops veikk_veikk_screen_map_ops = {
     .set = veikk_set_veikk_screen_map,
     .get = param_get_ullong
 };
-module_param_cb(veikk_screen_map, &veikk_veikk_screen_map_ops,
-                &veikk_screen_map, 0664);
+module_param_cb(screen_map, &veikk_veikk_screen_map_ops, &veikk_screen_map,
+                0664);
 /**
  * veikk_screen_size: total size of the screen area
  * <p>
@@ -119,8 +119,8 @@ static const struct kernel_param_ops veikk_veikk_screen_size_ops = {
     .set = veikk_set_veikk_screen_size,
     .get = param_get_uint
 };
-module_param_cb(veikk_screen_size, &veikk_veikk_screen_size_ops,
-                &veikk_screen_size, 0664);
+module_param_cb(screen_size, &veikk_veikk_screen_size_ops, &veikk_screen_size,
+                0664);
 /**
  * pressure_map: cubic coefficients for a pressure mapping
  * <p>
@@ -176,8 +176,8 @@ static const struct kernel_param_ops veikk_veikk_orientation_ops = {
     .set = veikk_set_veikk_orientation,
     .get = param_get_uint
 };
-module_param_cb(veikk_orientation, &veikk_veikk_orientation_ops,
-                &veikk_orientation, 0664);
+module_param_cb(orientation, &veikk_veikk_orientation_ops, &veikk_orientation,
+                0664);
 
 // TODO: module parameter(s) for stylus buttons
 
@@ -217,7 +217,7 @@ static struct veikk_rect veikk_sm_to_rect(u64 sm) {
  * - y_map_axis:    same as above, but for tablet's y-axis
  * - map_rect:      dimensions
  */
-void veikk_configure_input_devs(u64 sm, u32 ss, enum veikk_veikk_orientation or,
+void veikk_configure_input_devs(u64 sm, u32 ss, enum veikk_orientation or,
                                 struct veikk *veikk) {
     struct veikk_rect ss_rect, sm_rect;
 
@@ -259,5 +259,4 @@ void veikk_configure_input_devs(u64 sm, u32 ss, enum veikk_veikk_orientation or,
                  ? ss_rect.width*veikk->vdinfo->y_max/sm_rect.width
                  : ss_rect.height*veikk->vdinfo->y_max/sm_rect.height
     };
-    return 0;
 }

@@ -19,8 +19,6 @@ void veikk_input_close(struct input_dev *dev) {
 
 static int veikk_probe(struct hid_device *hdev,
                        const struct hid_device_id *id) {
-    struct usb_interface *intf = to_usb_interface(hdev->dev.parent);
-    struct usb_device *dev = interface_to_usbdev(intf);
     struct veikk *veikk;
     int error;
 
