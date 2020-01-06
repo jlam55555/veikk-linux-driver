@@ -1,3 +1,7 @@
+# This is the old branch. Active development is continuing on the [v2 branch](https://github.com/jlam55555/veikk-s640-driver/tree/v2), and will be merged when stable.
+
+---
+
 # Veikk S640 Drawing Tablet driver for Linux
 
 ![Veikk S640 Tablet Driver "Hello World" with GIMP and Krita][5]
