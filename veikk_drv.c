@@ -33,7 +33,10 @@ static int veikk_probe(struct hid_device *hdev,
     veikk->vdinfo = (struct veikk_device_info *) id->driver_data;
 
     // initialize veikk mapping defaults from vdinfo and calculations from
-    // veikk_screen_map and veikk_screen_size module parameters
+    // veikk_screen_map and veikk_screen_size module parameters; this doesn't
+    // actually configures input devs, but configures the parameters in the
+    // struct veikk to use later when configuring input_devs; see comments
+    // before function declaration
     // TODO: put under spinlock
     // TODO: document concurrency issues with modparms
     veikk_configure_input_devs(veikk_screen_map, veikk_screen_size,
@@ -67,14 +70,6 @@ static int veikk_probe(struct hid_device *hdev,
     // TODO: do under spinlock
     list_add(&veikk->lh, &vdevs);
 
-    // TODO: remove
-    __u8 buf[8] = {255,255,255,255,255,255,255,255};
-    __u8 *buffer = kmalloc(8, GFP_DMA);
-    buffer = memcpy(buffer, buf, 8);
-    hid_hw_output_report(veikk->hdev, buffer, 8);
-    kfree(buffer);
-    hid_info(veikk->hdev, "sent out buf\n");
-
     hid_info(veikk->hdev, "%s probed successfully.\n", veikk->vdinfo->name);
     return 0;
 
@@ -106,10 +101,11 @@ static int veikk_raw_event(struct hid_device *hdev, struct hid_report *report,
     struct veikk *veikk = hid_get_drvdata(hdev);
 
     // call device-specific raw input report handler
-    return (*veikk->vdinfo->handle_raw_data)(veikk, data, size);
+    return (*veikk->vdinfo->handle_raw_data)(veikk, data, size, report->id);
 }
 
-// uncomment for testing: read input reports
+// read input reports; for experimenting only; see veikk_raw_event for regular
+// input report handling
 void veikk_report(struct hid_device *hdev, struct hid_report *report) {
     int i, j;
     struct hid_field *field;
@@ -139,7 +135,7 @@ static struct hid_driver veikk_driver = {
     .probe = veikk_probe,
     .remove = veikk_remove,
     .raw_event = veikk_raw_event,
-    .report = veikk_report    // uncomment for testing
+//    .report = veikk_report    // uncomment for testing
 };
 module_hid_driver(veikk_driver);
 
