@@ -77,14 +77,6 @@ static int veikk_s640_setup_and_register_input_devs(struct veikk *veikk) {
     input_abs_set_res(pen_input, veikk->y_map_axis,
                       veikk->y_map_dir);
 
-    // TODO: remove
-    hid_info(hdev, "x: %d, y: %d, width: %d, height: %d, xa: %d, ya: %d, "
-                   "xd: %d, yd: %d\n",
-                   veikk->map_rect.x_start, veikk->map_rect.y_start,
-                   veikk->map_rect.width, veikk->map_rect.height,
-                   veikk->x_map_axis, veikk->y_map_axis,
-                   veikk->x_map_dir, veikk->y_map_dir);
-
     if((error = input_register_device(pen_input)))
         return error;
     return 0;
@@ -162,7 +154,7 @@ static int veikk_s640_handle_modparm_change(struct veikk *veikk, void *val,
         return error;
     }
 
-    hid_info(veikk->hdev, "successfully updated\n");
+    hid_info(veikk->hdev, "successfully updated module parameters\n");
     return 0;
 }
 /** END S640-SPECIFIC CODE **/
@@ -170,7 +162,25 @@ static int veikk_s640_handle_modparm_change(struct veikk *veikk, void *val,
 /** LIST ALL struct veikk_device_info HERE; see declaration for details **/
 // for loading into module device table (hotplugging)
 struct veikk_device_info veikk_device_info_0x0001 = {
-    .name = "Veikk S640", .prod_id = 0x0001,
+    .name = "VEIKK S640", .prod_id = 0x0001,
+    .x_max = 32768, .y_max = 32768, .pressure_max = 8192,
+    .setup_and_register_input_devs = veikk_s640_setup_and_register_input_devs,
+    .alloc_input_devs = veikk_s640_alloc_input_devs,
+    .handle_raw_data = veikk_s640_handle_raw_data,
+    .handle_modparm_change = veikk_s640_handle_modparm_change
+};
+// TODO: the following struct veikk_device_infos are provisional, and use the
+//       same handlers as for the S640
+struct veikk_device_info veikk_device_info_0x0002 = {
+    .name = "VEIKK A30", .prod_id = 0x0002,
+    .x_max = 32768, .y_max = 32768, .pressure_max = 8192,
+    .setup_and_register_input_devs = veikk_s640_setup_and_register_input_devs,
+    .alloc_input_devs = veikk_s640_alloc_input_devs,
+    .handle_raw_data = veikk_s640_handle_raw_data,
+    .handle_modparm_change = veikk_s640_handle_modparm_change
+};
+struct veikk_device_info veikk_device_info_0x0003 = {
+    .name = "VEIKK A50", .prod_id = 0x0003,
     .x_max = 32768, .y_max = 32768, .pressure_max = 8192,
     .setup_and_register_input_devs = veikk_s640_setup_and_register_input_devs,
     .alloc_input_devs = veikk_s640_alloc_input_devs,
@@ -184,6 +194,8 @@ struct veikk_device_info veikk_device_info_0x0001 = {
     .driver_data = (long unsigned int) &veikk_device_info_##prod
 const struct hid_device_id veikk_ids[] = {
     { VEIKK_DEVICE(0x0001) },
+    { VEIKK_DEVICE(0x0002) },
+    { VEIKK_DEVICE(0x0003) },
     // TODO: add more devices here
     {}
 };
