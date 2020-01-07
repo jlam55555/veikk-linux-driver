@@ -72,10 +72,8 @@ static int veikk_s640_setup_and_register_input_devs(struct veikk *veikk) {
                          veikk->vdinfo->pressure_max, 0, 0);
 
     // TODO: fix resolution (and fuzz, flat) values
-    input_abs_set_res(pen_input, veikk->x_map_axis,
-                      veikk->x_map_dir);
-    input_abs_set_res(pen_input, veikk->y_map_axis,
-                      veikk->y_map_dir);
+    input_abs_set_res(pen_input, veikk->x_map_axis, veikk->x_map_dir);
+    input_abs_set_res(pen_input, veikk->y_map_axis, veikk->y_map_dir);
 
     if((error = input_register_device(pen_input)))
         return error;
@@ -83,23 +81,33 @@ static int veikk_s640_setup_and_register_input_devs(struct veikk *veikk) {
 }
 
 // emit events from input_dev on input reports
-static int veikk_s640_handle_raw_data(struct veikk *veikk, u8 *data, int size) {
+static int veikk_s640_handle_raw_data(struct veikk *veikk, u8 *data, int size,
+                                      unsigned int report_id) {
     struct input_dev *pen_input = veikk->pen_input;
+    struct veikk_pen_report *pen_report;
 
-    // validate size
-    if(size != 8)
-        return -EINVAL;
+    switch(report_id) {
+    case VEIKK_PEN_REPORT:
+        // validate size
+        if(size != sizeof(struct veikk_pen_report))
+            return -EINVAL;
 
-    // dispatch events with input_dev
-    input_report_abs(pen_input, veikk->x_map_axis,
-                     veikk->x_map_dir*get_unaligned_le16(data+2));
-    input_report_abs(pen_input, veikk->y_map_axis,
-                     veikk->y_map_dir*get_unaligned_le16(data+4));
-    input_report_abs(pen_input, ABS_PRESSURE, get_unaligned_le16(data+6));
+        // dispatch events with input_dev
+        pen_report = (struct veikk_pen_report *) data;
+        input_report_abs(pen_input, veikk->x_map_axis,
+                         veikk->x_map_dir*pen_report->x);
+        input_report_abs(pen_input, veikk->y_map_axis,
+                         veikk->y_map_dir*pen_report->y);
+        input_report_abs(pen_input, ABS_PRESSURE, pen_report->pressure);
 
-    input_report_key(pen_input, BTN_TOUCH, data[1]&0x01);
-    input_report_key(pen_input, BTN_STYLUS, data[1]&0x02);
-    input_report_key(pen_input, BTN_STYLUS2, data[1]&0x04);
+        input_report_key(pen_input, BTN_TOUCH, pen_report->buttons&0x1);
+        input_report_key(pen_input, BTN_STYLUS, pen_report->buttons&0x2);
+        input_report_key(pen_input, BTN_STYLUS2, pen_report->buttons&0x4);
+        break;
+    default:
+        hid_info(veikk->hdev, "Unknown input report with id %d\n", report_id);
+        return 0;
+    }
 
     // on successful data parse and event emission, emit EV_SYN on input_devs
     input_sync(pen_input);

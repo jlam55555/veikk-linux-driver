@@ -18,6 +18,8 @@
 #define VEIKK_DRIVER_AUTHOR     "Jonathan Lam <jlam55555@gmail.com>"
 #define VEIKK_DRIVER_DESC       "USB VEIKK drawing tablet driver"
 
+#define VEIKK_PEN_REPORT        0x0001
+
 // supported module parameter types
 enum veikk_modparm {
     VEIKK_MP_SCREEN_MAP,
@@ -37,6 +39,13 @@ struct veikk_rect {
     int x_start, y_start, width, height;
 };
 
+// pen input report -- structure of input report from tablet
+struct veikk_pen_report {
+    u8 report_id;
+    u8 buttons;
+    u16 x, y, pressure;
+};
+
 // device-specific properties; one created for every device. These
 // characteristics should not be modified anywhere in the program; any
 // modifiable properties (e.g., mapped characteristics) should be copied
@@ -53,7 +62,8 @@ struct veikk_device_info {
     // device-specific handlers
     int (*alloc_input_devs)(struct veikk *veikk);
     int (*setup_and_register_input_devs)(struct veikk *veikk);
-    int (*handle_raw_data)(struct veikk *veikk, u8 *data, int size);
+    int (*handle_raw_data)(struct veikk *veikk, u8 *data, int size,
+                           unsigned int report_id);
     int (*handle_modparm_change)(struct veikk *veikk, void *val,
                                  enum veikk_modparm modparm);
 };
