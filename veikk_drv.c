@@ -67,6 +67,11 @@ static int veikk_probe(struct hid_device *hdev,
     // TODO: do under spinlock
     list_add(&veikk->lh, &vdevs);
 
+    // TODO: remove
+    __u8 buf[8] = {255,255,255,255,255,255,255,255};
+    //hid_hw_output_report(veikk->hdev, buf, sizeof buf);
+    //hid_info(veikk->hdev, "sent out buf\n");
+
     hid_info(veikk->hdev, "%s probed successfully.\n", veikk->vdinfo->name);
     return 0;
 
@@ -102,27 +107,27 @@ static int veikk_raw_event(struct hid_device *hdev, struct hid_report *report,
 }
 
 // uncomment for testing: read input reports
-//void veikk_report(struct hid_device *hdev, struct hid_report *report) {
-//    int i, j;
-//    struct hid_field *field;
-//    struct hid_usage *usage;
-//
-//    hid_info(hdev, "parsing report: %d %d %d %d %d\n",
-//             report->id, report->type, report->application, report->maxfield,
-//             report->size);
-//
-//    for(i=0; i<report->maxfield; i++) {
-//        for(j=0; j<report->field[i]->maxusage; j++) {
-//            field = report->field[i];
-//            usage = &field->usage[j];
-//
-//            // TODO: read/print actual data at these offsets
-//            hid_info(hdev, "field %d usage %d: %x; offset: %d; size: %d\n",
-//                           i, j, usage->hid, field->report_offset,
-//                           field->report_size);
-//        }
-//    }
-//}
+void veikk_report(struct hid_device *hdev, struct hid_report *report) {
+    int i, j;
+    struct hid_field *field;
+    struct hid_usage *usage;
+
+    hid_info(hdev, "parsing report: %d %d %d %d %d\n",
+             report->id, report->type, report->application, report->maxfield,
+             report->size);
+
+    for(i=0; i<report->maxfield; i++) {
+        for(j=0; j<report->field[i]->maxusage; j++) {
+            field = report->field[i];
+            usage = &field->usage[j];
+
+            // TODO: read/print actual data at these offsets
+            hid_info(hdev, "field %d usage %d: %x; offset: %d; size: %d\n",
+                           i, j, usage->hid, field->report_offset,
+                           field->report_size);
+        }
+    }
+}
 
 /* Register module */
 static struct hid_driver veikk_driver = {
@@ -131,7 +136,7 @@ static struct hid_driver veikk_driver = {
     .probe = veikk_probe,
     .remove = veikk_remove,
     .raw_event = veikk_raw_event,
-//    .report = veikk_report    // uncomment for testing
+    .report = veikk_report    // uncomment for testing
 };
 module_hid_driver(veikk_driver);
 
