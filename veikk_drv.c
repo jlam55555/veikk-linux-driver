@@ -69,8 +69,11 @@ static int veikk_probe(struct hid_device *hdev,
 
     // TODO: remove
     __u8 buf[8] = {255,255,255,255,255,255,255,255};
-    //hid_hw_output_report(veikk->hdev, buf, sizeof buf);
-    //hid_info(veikk->hdev, "sent out buf\n");
+    __u8 *buffer = kmalloc(8, GFP_DMA);
+    buffer = memcpy(buffer, buf, 8);
+    hid_hw_output_report(veikk->hdev, buffer, 8);
+    kfree(buffer);
+    hid_info(veikk->hdev, "sent out buf\n");
 
     hid_info(veikk->hdev, "%s probed successfully.\n", veikk->vdinfo->name);
     return 0;
