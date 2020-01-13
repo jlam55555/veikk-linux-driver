@@ -139,6 +139,9 @@ static int veikk_s640_handle_modparm_change(struct veikk *veikk, void *val,
         veikk_configure_input_devs(veikk_screen_map, veikk_screen_size,
                                    *((u32 *) val), veikk);
         break;
+    case VEIKK_MP_PRESSURE_MAP:
+        // nothing to do -- pressure calculated on the spot
+        break;
     default:
         // TODO: reword
         hid_info(veikk->hdev, "invalid module parameter selected\n");

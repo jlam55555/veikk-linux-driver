@@ -36,9 +36,14 @@ enum veikk_orientation {
 };
 // struct for representing rectangular geometries (physical/mappings)
 struct veikk_rect {
-    int x_start, y_start, width, height;
+    u32 x_start, y_start, width, height;
 };
-
+// struct for representing (cubic) pressure map coefficients, semantically,
+// i.e., P=a3*p**3+a2*p**2+a1*p+a0; see notes in veikk_modparms.c because these
+// coefficients are not exactly ready to be used as-is, need to be scaled first
+struct veikk_pressure_coefficients {
+    u16 a3, a2, a1, a0;
+};
 // pen input report -- structure of input report from tablet
 struct veikk_pen_report {
     u8 report_id;
@@ -98,7 +103,8 @@ extern const struct hid_device_id veikk_ids[];
 // from veikk_modparms.c
 extern u64 veikk_screen_map;
 extern u32 veikk_screen_size;
-extern u32 veikk_pressure_map;
+extern u64 veikk_pressure_map;
+extern struct veikk_pressure_coefficients veikk_pressure_coefficients;
 extern u32 veikk_orientation;
 
 // module parameter (configuration) helper

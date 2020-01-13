@@ -125,13 +125,67 @@ module_param_cb(screen_size, &veikk_veikk_screen_size_ops, &veikk_screen_size,
  * pressure_map: cubic coefficients for a pressure mapping
  * <p>
  * Let the output pressure be P, and input pressure be p. This parameter defines
- * a3,a1,a2,a0 such that P=a3*p^3+a2*p^2+a1*p+a0. Any integer values for any/all
- * of these parameters is valid.
+ * a3,a1,a2,a0 such that P=a3*p**3+a2*p**2+a1*p+a0, where p,P are in [0,1]. The
+ * pressure function will be scaled to the full pressure input resolution as the
+ * resulting pressure is being calculated. Any integer values for any/all of
+ * these parameters is valid, but a callback is still available for any desired
+ * processing (nothing is done in the default callback).
  * <p>
- * format: (u32) ((((u8)a3)<<24) | (((u8)a2)<<16) | (((u8)a1)<<8) | ((u8)a0))
- * default: 256 (linear mapping, a3=a2=a0=0, a1=1, P=p)
+ * format: (u64) ((((u16)100*a3)<<48) | (((u16)100*a2)<<32)
+ *             | (((u16)100*a1)<<16) | ((u16)100*a0))
+ * default: 100<<16=6553600 (linear mapping, a3=a2=a0=0, a1=1, P=p)
+ * <p>
+ * Note: Each coefficient is stored multiplied by 100 in a short int (16-bit)
+ * representation. I.e., to represent the coefficients a3=a0=0, a1=54.64,
+ * a2=2.5, the pressure_map orientation would be (5464<<32)|(250<<16). This
+ * means that any coefficient in the range [-327.68:0.01:327.67] is
+ * representable in this format, which should cover reasonable pressure mappings
+ * (more extreme pressure mappings may not be representable like this).
  */
-u32 pressure_map;
+u64 veikk_pressure_map = 100<<16;
+// global ease-of-use struct; note that these coefficients still have to be
+// divided by 100 and scaled to device pressure resolution later
+struct veikk_pressure_coefficients veikk_pressure_coefficients = {
+    .a3 = 0,
+    .a2 = 0,
+    .a1 = 100,
+    .a0 = 0
+};
+static int veikk_set_pressure_map(const char *val,
+                                  const struct kernel_param *kp) {
+    int error;
+    u64 pm;
+    struct list_head *lh;
+    struct veikk *veikk;
+
+    if((error = kstrtoull(val, 10, &pm)))
+        return error;
+
+    // no checks to perform except that it is an integral value
+    veikk_pressure_coefficients = *((struct veikk_pressure_coefficients *) val);
+
+    // TODO: remove this
+    printk(KERN_INFO "new pressure map: %d %d %d %d\n",
+           veikk_pressure_coefficients.a3, veikk_pressure_coefficients.a2,
+           veikk_pressure_coefficients.a3, veikk_pressure_coefficients.a0);
+
+    // call device-specific handlers
+    list_for_each(lh, &vdevs) {
+        veikk = list_entry(lh, struct veikk, lh);
+
+        // TODO: if error, revert all previous changes for consistency?
+        if((error = (*veikk->vdinfo->handle_modparm_change)(veikk, &pm,
+                                                        VEIKK_MP_PRESSURE_MAP)))
+            return error;
+    }
+    return param_set_ullong(val, kp);
+}
+static const struct kernel_param_ops veikk_pressure_map_ops = {
+    .set = veikk_set_pressure_map,
+    .get = param_get_ullong
+};
+module_param_cb(pressure_map, &veikk_pressure_map_ops, &veikk_pressure_map,
+                0664);
 /**
  * veikk_orientation: set device veikk_orientation
  * <p>
@@ -172,11 +226,11 @@ static int veikk_set_veikk_orientation(const char *val,
     }
     return param_set_uint(val, kp);
 }
-static const struct kernel_param_ops veikk_veikk_orientation_ops = {
+static const struct kernel_param_ops veikk_orientation_ops = {
     .set = veikk_set_veikk_orientation,
     .get = param_get_uint
 };
-module_param_cb(orientation, &veikk_veikk_orientation_ops, &veikk_orientation,
+module_param_cb(orientation, &veikk_orientation_ops, &veikk_orientation,
                 0664);
 
 // TODO: module parameter(s) for stylus buttons
