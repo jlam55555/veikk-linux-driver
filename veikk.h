@@ -40,9 +40,10 @@ struct veikk_rect {
 };
 // struct for representing (cubic) pressure map coefficients, semantically,
 // i.e., P=a3*p**3+a2*p**2+a1*p+a0; see notes in veikk_modparms.c because these
-// coefficients are not exactly ready to be used as-is, need to be scaled first
+// coefficients are not exactly ready to be used as-is, need to be scaled first.
+// note that order matters, based on formatted (and little-endianness)
 struct veikk_pressure_coefficients {
-    u16 a3, a2, a1, a0;
+    s16 a0, a1, a2, a3;
 };
 // pen input report -- structure of input report from tablet
 struct veikk_pen_report {
@@ -110,4 +111,8 @@ extern u32 veikk_orientation;
 // module parameter (configuration) helper
 void veikk_configure_input_devs(u64 sm, u32 ss, enum veikk_orientation or,
                                 struct veikk *veikk);
+
+// calculate pressure map -- for use in raw_event handler
+int veikk_map_pressure(s64 pres, s64 pres_max,
+                       struct veikk_pressure_coefficients *coef);
 #endif

@@ -131,8 +131,11 @@ module_param_cb(screen_size, &veikk_veikk_screen_size_ops, &veikk_screen_size,
  * these parameters is valid, but a callback is still available for any desired
  * processing (nothing is done in the default callback).
  * <p>
- * format: (u64) ((((u16)100*a3)<<48) | (((u16)100*a2)<<32)
- *             | (((u16)100*a1)<<16) | ((u16)100*a0))
+ * given a3,a2,a1,a0 are signed 16-bit integers (s16)
+ * format: (((u64)((u16)(100*a3)))<<48) |
+ *         (((u64)((u16)(100*a2)))<<32) |
+ *         (((u64)((u16)(100*a1)))<<16) |
+ *         (((u64)((u16)(100*a0)))<<0)
  * default: 100<<16=6553600 (linear mapping, a3=a2=a0=0, a1=1, P=p)
  * <p>
  * Note: Each coefficient is stored multiplied by 100 in a short int (16-bit)
@@ -162,12 +165,7 @@ static int veikk_set_pressure_map(const char *val,
         return error;
 
     // no checks to perform except that it is an integral value
-    veikk_pressure_coefficients = *((struct veikk_pressure_coefficients *) val);
-
-    // TODO: remove this
-    printk(KERN_INFO "new pressure map: %d %d %d %d\n",
-           veikk_pressure_coefficients.a3, veikk_pressure_coefficients.a2,
-           veikk_pressure_coefficients.a3, veikk_pressure_coefficients.a0);
+    veikk_pressure_coefficients = *((struct veikk_pressure_coefficients *) &pm);
 
     // call device-specific handlers
     list_for_each(lh, &vdevs) {
@@ -313,4 +311,26 @@ void veikk_configure_input_devs(u64 sm, u32 ss, enum veikk_orientation or,
                  ? ss_rect.width*veikk->vdinfo->y_max/sm_rect.width
                  : ss_rect.height*veikk->vdinfo->y_max/sm_rect.height
     };
+}
+/**
+ * Helper to calculate mapped pressure from input pressure and coefficients.
+ * The coefficients are for a cubic on a 1x1 region, but we want the output
+ * cubic mapping to be on a [pres_max (domain)]x[pres_max (output)] region. This
+ * does the appropriate scaling in both x- and y-directions. Additionally, this
+ * also scales each coefficient by 1/100 to imitate floating point precision.
+ * <p>
+ * Based on the size of the numbers (pressure approx. 2^13, coefficients 2^16),
+ * all arithmetic fits in (signed) 64-bit integers. Division (in order from
+ * smaller to larger dividends) is done after multiplication to increase
+ * precision. Bounds are not checked (it should be capped automatically by
+ * libinput). Signed 64 bit arithmetic is used throughout, and result is
+ * returned as a signed 32-bit integer (int).
+ */
+int veikk_map_pressure(s64 pres, s64 pres_max,
+                       struct veikk_pressure_coefficients *coef) {
+    static const int sf = 100;  // constant scale factor of 100 for all coefs
+    return (s32) (((coef->a3*pres*pres*pres/pres_max/pres_max)
+                 + (coef->a2*pres*pres/pres_max)
+                 + (coef->a1*pres)
+                 + (coef->a0*pres_max))/sf);
 }

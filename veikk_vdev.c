@@ -98,7 +98,10 @@ static int veikk_s640_handle_raw_data(struct veikk *veikk, u8 *data, int size,
                          veikk->x_map_dir*pen_report->x);
         input_report_abs(pen_input, veikk->y_map_axis,
                          veikk->y_map_dir*pen_report->y);
-        input_report_abs(pen_input, ABS_PRESSURE, pen_report->pressure);
+        input_report_abs(pen_input, ABS_PRESSURE,
+                         veikk_map_pressure(pen_report->pressure,
+                                            veikk->vdinfo->pressure_max,
+                                            &veikk_pressure_coefficients));
 
         input_report_key(pen_input, BTN_TOUCH, pen_report->buttons&0x1);
         input_report_key(pen_input, BTN_STYLUS, pen_report->buttons&0x2);
