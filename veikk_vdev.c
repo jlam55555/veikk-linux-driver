@@ -176,7 +176,9 @@ static int veikk_s640_handle_modparm_change(struct veikk *veikk, void *val,
 /** LIST ALL struct veikk_device_info HERE; see declaration for details **/
 // for loading into module device table (hotplugging)
 struct veikk_device_info veikk_device_info_0x0001 = {
-    .name = "VEIKK S640", .prod_id = 0x0001,
+    // "Pen" in name because doesn't work in a particular Arch distribution
+    // with an arbitrary name
+    .name = "VEIKK S640 Pen", .prod_id = 0x0001,
     .x_max = 32768, .y_max = 32768, .pressure_max = 8192,
     .setup_and_register_input_devs = veikk_s640_setup_and_register_input_devs,
     .alloc_input_devs = veikk_s640_alloc_input_devs,
@@ -186,7 +188,7 @@ struct veikk_device_info veikk_device_info_0x0001 = {
 // TODO: the following struct veikk_device_infos are provisional, and use the
 //       same handlers as for the S640
 struct veikk_device_info veikk_device_info_0x0002 = {
-    .name = "VEIKK A30", .prod_id = 0x0002,
+    .name = "VEIKK A30 Pen", .prod_id = 0x0002,
     .x_max = 32768, .y_max = 32768, .pressure_max = 8192,
     .setup_and_register_input_devs = veikk_s640_setup_and_register_input_devs,
     .alloc_input_devs = veikk_s640_alloc_input_devs,
@@ -194,7 +196,7 @@ struct veikk_device_info veikk_device_info_0x0002 = {
     .handle_modparm_change = veikk_s640_handle_modparm_change
 };
 struct veikk_device_info veikk_device_info_0x0003 = {
-    .name = "VEIKK A50", .prod_id = 0x0003,
+    .name = "VEIKK A50 Pen", .prod_id = 0x0003,
     .x_max = 32768, .y_max = 32768, .pressure_max = 8192,
     .setup_and_register_input_devs = veikk_s640_setup_and_register_input_devs,
     .alloc_input_devs = veikk_s640_alloc_input_devs,
