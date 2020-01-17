@@ -131,35 +131,8 @@ static int veikk_s640_handle_raw_data(struct veikk *veikk, u8 *data, int size,
 // parameters. This makes the assumption that all module parameters except for
 // the one specified by modparm are updated; the value of the new modparm is
 // stored in val
-static int veikk_s640_handle_modparm_change(struct veikk *veikk, void *val,
-                                            enum veikk_modparm modparm) {
+static int veikk_s640_handle_modparm_change(struct veikk *veikk) {
     int error;
-
-    // update parameters depending on which parameter was changed
-//    switch(modparm) {
-//    case VEIKK_MP_SCREEN_MAP:
-//        // TODO: put under spinlock
-//        veikk_configure_input_devs(veikk_screen_map, veikk_screen_size,
-//                                   veikk_orientation, veikk);
-//        break;
-//    case VEIKK_MP_SCREEN_SIZE:
-//        // TODO: put under spinlock
-//        veikk_configure_input_devs(veikk_screen_map, veikk_screen_size,
-//                                   veikk_orientation, veikk);
-//        break;
-//    case VEIKK_MP_ORIENTATION:
-//        // TODO: put under spinlock
-//        veikk_configure_input_devs(veikk_screen_map, veikk_screen_size,
-//                                   veikk_orientation, veikk);
-//        break;
-//    case VEIKK_MP_PRESSURE_MAP:
-//        // nothing to do -- pressure calculated on the spot
-//        break;
-//    default:
-//        // TODO: reword
-//        hid_info(veikk->hdev, "invalid module parameter selected\n");
-//        return -EINVAL;
-//    }
 
     // un-register device
     input_unregister_device(veikk->pen_input);

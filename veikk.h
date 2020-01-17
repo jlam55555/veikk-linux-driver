@@ -21,6 +21,7 @@
 #define VEIKK_PEN_REPORT        0x0001
 
 // supported module parameter types
+// TODO: currently not used; may remove in future
 enum veikk_modparm {
     VEIKK_MP_SCREEN_MAP,
     VEIKK_MP_SCREEN_SIZE,
@@ -81,8 +82,7 @@ struct veikk_device_info {
     int (*setup_and_register_input_devs)(struct veikk *veikk);
     int (*handle_raw_data)(struct veikk *veikk, u8 *data, int size,
                            unsigned int report_id);
-    int (*handle_modparm_change)(struct veikk *veikk, void *val,
-                                 enum veikk_modparm modparm);
+    int (*handle_modparm_change)(struct veikk *veikk);
 };
 
 // common properties for veikk devices
@@ -117,11 +117,6 @@ extern struct veikk_rect veikk_screen_map;
 extern struct veikk_rect veikk_screen_size;
 extern enum veikk_orientation veikk_orientation;
 extern struct veikk_pressure_map veikk_pressure_map;
-//extern u64 veikk_screen_map;
-//extern u32 veikk_screen_size;
-//extern u64 veikk_pressure_map;
-//extern struct veikk_pressure_map veikk_pressure_map;
-//extern u32 veikk_orientation;
 
 // module parameter (configuration) helper
 void veikk_configure_input_devs(struct veikk_rect ss,

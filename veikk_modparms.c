@@ -18,10 +18,6 @@
 #include <linux/moduleparam.h>
 #include "veikk.h"
 
-// local helper functions
-//static struct veikk_rect veikk_ss_to_rect(u32 ss);
-//static struct veikk_rect veikk_sm_to_rect(u64 sm);
-
 // GLOBAL MODULE PARAMETERS
 // Note: by spec, unsigned long long is 64+ bits, so functions designed for
 //       unsigned long long are used for u64 module parameters (and the same
@@ -76,8 +72,7 @@ static int veikk_set_veikk_screen_size(const char *val,
         veikk = list_entry(lh, struct veikk, lh);
 
         // TODO: if error, revert all previous changes for consistency?
-        if((error = (*veikk->vdinfo->handle_modparm_change)(veikk, &ss,
-                                                         VEIKK_MP_SCREEN_SIZE)))
+        if((error = (*veikk->vdinfo->handle_modparm_change)(veikk)))
             return error;
     }
     return param_set_uint(val, kp);
@@ -136,8 +131,7 @@ static int veikk_set_veikk_screen_map(const char *val,
         veikk = list_entry(lh, struct veikk, lh);
 
         // TODO: if error, revert all previous changes for consistency?
-        if((error = (*veikk->vdinfo->handle_modparm_change)(veikk, &sm,
-                                                            VEIKK_MP_SCREEN_MAP)))
+        if((error = (*veikk->vdinfo->handle_modparm_change)(veikk)))
             return error;
     }
     return param_set_ullong(val, kp);
@@ -184,8 +178,7 @@ static int veikk_set_veikk_orientation(const char *val,
         veikk = list_entry(lh, struct veikk, lh);
 
         // TODO: if error, revert all previous changes for consistency?
-        if((error = (*veikk->vdinfo->handle_modparm_change)(veikk, &or,
-                                                         VEIKK_MP_ORIENTATION)))
+        if((error = (*veikk->vdinfo->handle_modparm_change)(veikk)))
             return error;
     }
     return param_set_uint(val, kp);
@@ -248,8 +241,7 @@ static int veikk_set_pressure_map(const char *val,
         veikk = list_entry(lh, struct veikk, lh);
 
         // TODO: if error, revert all previous changes for consistency?
-        if((error = (*veikk->vdinfo->handle_modparm_change)(veikk, &pm,
-                                                            VEIKK_MP_PRESSURE_MAP)))
+        if((error = (*veikk->vdinfo->handle_modparm_change)(veikk)))
             return error;
     }
     return param_set_ullong(val, kp);
@@ -263,27 +255,6 @@ module_param_cb(pressure_map, &veikk_pressure_map_ops,
 
 // TODO: module parameter(s) for stylus buttons
 
-// HELPER FUNCTIONS CORRESPONDING TO THE DESCRIPTIONS ABOVE
-// screen size to struct veikk rect
-//static struct veikk_rect veikk_ss_to_rect(u32 ss) {
-//    struct veikk_rect rect = {
-//        .x = 0,
-//        .y = 0,
-//        .width = (u16)(ss>>16),
-//        .height = (u16)ss
-//    };
-//    return rect;
-//}
-//// screen map to struct veikk_rect
-//static struct veikk_rect veikk_sm_to_rect(u64 sm) {
-//    struct veikk_rect rect = {
-//        .x = (u16)(sm>>48),
-//        .y = (u16)(sm>>32),
-//        .width = (u16)(sm>>16),
-//        .height = (u16)sm
-//    };
-//    return rect;
-//}
 /**
  * Helper to perform calculations given screen size/screen map/veikk_orientation,
  * calculating x/y bounds, axes, and directions based on the parameters, so that
