@@ -1,7 +1,2 @@
-*
-
-!veikk.c
-!.gitignore
-!config.sh
-!README.md
-!Makefile
+cmake-build-debug
+.idea
