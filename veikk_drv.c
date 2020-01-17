@@ -32,16 +32,6 @@ static int veikk_probe(struct hid_device *hdev,
     veikk->hdev = hdev;
     veikk->vdinfo = (struct veikk_device_info *) id->driver_data;
 
-    // initialize veikk mapping defaults from vdinfo and calculations from
-    // veikk_screen_map and veikk_screen_size module parameters; this doesn't
-    // actually configures input devs, but configures the parameters in the
-    // struct veikk to use later when configuring input_devs; see comments
-    // before function declaration
-    // TODO: put under spinlock
-    // TODO: document concurrency issues with modparms
-    veikk_configure_input_devs(veikk_screen_map, veikk_screen_size,
-                               veikk_orientation, veikk);
-
     // TODO: set quirks? probably not necessary
     // TODO: set up workqueue interface? doesn't seem necessary
     // TODO: allocate pen fifo? doesn't seem necessary

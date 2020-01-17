@@ -54,6 +54,16 @@ static int veikk_s640_setup_and_register_input_devs(struct veikk *veikk) {
     // that of hdev, so must set its data to point to veikk as well
     input_set_drvdata(pen_input, veikk);
 
+    // initialize veikk mapping defaults from vdinfo and calculations from
+    // veikk_screen_map and veikk_screen_size module parameters; this doesn't
+    // actually configures input devs, but configures the parameters in the
+    // struct veikk to use later when configuring input_devs; see comments
+    // before function declaration
+    // TODO: put under spinlock
+    // TODO: document concurrency issues with modparms
+    veikk_configure_input_devs(veikk_screen_size, veikk_screen_map,
+                               veikk_orientation, veikk);
+
     // set up pen capabilities
     pen_input->evbit[0] |= BIT_MASK(EV_KEY)|BIT_MASK(EV_ABS);
     __set_bit(INPUT_PROP_DIRECT, pen_input->propbit);
@@ -63,10 +73,10 @@ static int veikk_s640_setup_and_register_input_devs(struct veikk *veikk) {
     __set_bit(BTN_STYLUS, pen_input->keybit);
     __set_bit(BTN_STYLUS2, pen_input->keybit);
 
-    input_set_abs_params(pen_input, veikk->x_map_axis, veikk->map_rect.x_start,
-                         veikk->map_rect.x_start+veikk->map_rect.width, 0, 0);
-    input_set_abs_params(pen_input, veikk->y_map_axis, veikk->map_rect.y_start,
-                         veikk->map_rect.y_start+veikk->map_rect.height, 0, 0);
+    input_set_abs_params(pen_input, veikk->x_map_axis, veikk->map_rect.x,
+                         veikk->map_rect.x+veikk->map_rect.width, 0, 0);
+    input_set_abs_params(pen_input, veikk->y_map_axis, veikk->map_rect.y,
+                         veikk->map_rect.y+veikk->map_rect.height, 0, 0);
     // TODO: work on pressure mapping
     input_set_abs_params(pen_input, ABS_PRESSURE, 0,
                          veikk->vdinfo->pressure_max, 0, 0);
@@ -101,7 +111,7 @@ static int veikk_s640_handle_raw_data(struct veikk *veikk, u8 *data, int size,
         input_report_abs(pen_input, ABS_PRESSURE,
                          veikk_map_pressure(pen_report->pressure,
                                             veikk->vdinfo->pressure_max,
-                                            &veikk_pressure_coefficients));
+                                            &veikk_pressure_map));
 
         input_report_key(pen_input, BTN_TOUCH, pen_report->buttons&0x1);
         input_report_key(pen_input, BTN_STYLUS, pen_report->buttons&0x2);
@@ -126,30 +136,30 @@ static int veikk_s640_handle_modparm_change(struct veikk *veikk, void *val,
     int error;
 
     // update parameters depending on which parameter was changed
-    switch(modparm) {
-    case VEIKK_MP_SCREEN_MAP:
-        // TODO: put under spinlock
-        veikk_configure_input_devs(*((u64 *) val), veikk_screen_size,
-                                   veikk_orientation, veikk);
-        break;
-    case VEIKK_MP_SCREEN_SIZE:
-        // TODO: put under spinlock
-        veikk_configure_input_devs(veikk_screen_map, (*(u32 *) val),
-                                   veikk_orientation, veikk);
-        break;
-    case VEIKK_MP_ORIENTATION:
-        // TODO: put under spinlock
-        veikk_configure_input_devs(veikk_screen_map, veikk_screen_size,
-                                   *((u32 *) val), veikk);
-        break;
-    case VEIKK_MP_PRESSURE_MAP:
-        // nothing to do -- pressure calculated on the spot
-        break;
-    default:
-        // TODO: reword
-        hid_info(veikk->hdev, "invalid module parameter selected\n");
-        return -EINVAL;
-    }
+//    switch(modparm) {
+//    case VEIKK_MP_SCREEN_MAP:
+//        // TODO: put under spinlock
+//        veikk_configure_input_devs(veikk_screen_map, veikk_screen_size,
+//                                   veikk_orientation, veikk);
+//        break;
+//    case VEIKK_MP_SCREEN_SIZE:
+//        // TODO: put under spinlock
+//        veikk_configure_input_devs(veikk_screen_map, veikk_screen_size,
+//                                   veikk_orientation, veikk);
+//        break;
+//    case VEIKK_MP_ORIENTATION:
+//        // TODO: put under spinlock
+//        veikk_configure_input_devs(veikk_screen_map, veikk_screen_size,
+//                                   veikk_orientation, veikk);
+//        break;
+//    case VEIKK_MP_PRESSURE_MAP:
+//        // nothing to do -- pressure calculated on the spot
+//        break;
+//    default:
+//        // TODO: reword
+//        hid_info(veikk->hdev, "invalid module parameter selected\n");
+//        return -EINVAL;
+//    }
 
     // un-register device
     input_unregister_device(veikk->pen_input);

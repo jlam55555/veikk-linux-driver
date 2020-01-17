@@ -19,61 +19,13 @@
 #include "veikk.h"
 
 // local helper functions
-static struct veikk_rect veikk_ss_to_rect(u32 ss);
-static struct veikk_rect veikk_sm_to_rect(u64 sm);
+//static struct veikk_rect veikk_ss_to_rect(u32 ss);
+//static struct veikk_rect veikk_sm_to_rect(u64 sm);
 
 // GLOBAL MODULE PARAMETERS
 // Note: by spec, unsigned long long is 64+ bits, so functions designed for
 //       unsigned long long are used for u64 module parameters (and the same
 //       for unsigned int functions for u32 parameters)
-/**
- * veikk_screen_map: region of the screen to map
- * <p>
- * Sets the start x, start y, width, and height of the mapped region on the
- * screen. Should make sure veikk_screen_size is also valid. Valid values:
- * - all zero (default mapping); or
- * - width,height>0 (start_x,start_y can be any number)
- * Note that if either veikk_screen_map or veikk_screen_size are all zero, then
- * the mapping will be set to the default.
- * <p>
- * format: (u64) ((((u16)start_x)<<48) | (((u16)start_y)<<32)
- *                | (((u16)width)<<16) | ((u16)height))
- * default: 0 (default mapping)
- */
-u64 veikk_screen_map;
-static int veikk_set_veikk_screen_map(const char *val,
-                                const struct kernel_param *kp) {
-    int error;
-    u64 sm;
-    struct list_head *lh;
-    struct veikk *veikk;
-    struct veikk_rect rect;
-
-    if((error = kstrtoull(val, 10, &sm)))
-        return error;
-
-    // check that entire number is zero, or that width, height > 0 (see desc)
-    rect = veikk_sm_to_rect(sm);
-    if(sm && (rect.width<=0 || rect.height<=0))
-        return -EINVAL;
-
-    // call device-specific handlers
-    list_for_each(lh, &vdevs) {
-        veikk = list_entry(lh, struct veikk, lh);
-
-        // TODO: if error, revert all previous changes for consistency?
-        if((error = (*veikk->vdinfo->handle_modparm_change)(veikk, &sm,
-                                                          VEIKK_MP_SCREEN_MAP)))
-            return error;
-    }
-    return param_set_ullong(val, kp);
-}
-static const struct kernel_param_ops veikk_veikk_screen_map_ops = {
-    .set = veikk_set_veikk_screen_map,
-    .get = param_get_ullong
-};
-module_param_cb(screen_map, &veikk_veikk_screen_map_ops, &veikk_screen_map,
-                0664);
 /**
  * veikk_screen_size: total size of the screen area
  * <p>
@@ -84,25 +36,40 @@ module_param_cb(screen_map, &veikk_veikk_screen_map_ops, &veikk_screen_map,
  * Note that if either veikk_screen_map or veikk_screen_size are all zero,
  * then the mapping will be set to the default.
  * <p>
- * format: (u32) ((((u16)width)<<16) | ((u16)height))
+ * format: serialized struct veikk_screen_size
  * default: 0 (default mapping)
  */
-u32 veikk_screen_size;
+static u32 veikk_screen_size_serial;
+struct veikk_rect veikk_screen_size = {
+    .x = 0,
+    .y = 0,
+    .width = 0,
+    .height = 0
+};
 static int veikk_set_veikk_screen_size(const char *val,
                                  const struct kernel_param *kp) {
     int error;
     u32 ss;
     struct list_head *lh;
     struct veikk *veikk;
-    struct veikk_rect rect;
+    struct veikk_screen_size screen_size;
 
     if((error = kstrtouint(val, 10, &ss)))
         return error;
 
     // check that entire number is zero, or that width, height > 0 (see desc)
-    rect = veikk_ss_to_rect(ss);
-    if(ss && (rect.width<=0 || rect.height<=0))
+    screen_size = *(struct veikk_screen_size *)&ss;
+    if(ss && (screen_size.width<=0 || screen_size.height<=0))
         return -EINVAL;
+
+    // see note in header about deserializing with modparm-specific type and
+    // storing in more generic veikk_rect type
+    veikk_screen_size = (struct veikk_rect) {
+        .x = 0,
+        .y = 0,
+        .width = screen_size.width,
+        .height = screen_size.height
+    };
 
     // call device-specific handlers
     list_for_each(lh, &vdevs) {
@@ -119,71 +86,68 @@ static const struct kernel_param_ops veikk_veikk_screen_size_ops = {
     .set = veikk_set_veikk_screen_size,
     .get = param_get_uint
 };
-module_param_cb(screen_size, &veikk_veikk_screen_size_ops, &veikk_screen_size,
-                0664);
+module_param_cb(screen_size, &veikk_veikk_screen_size_ops,
+                &veikk_screen_size_serial, 0664);
 /**
- * pressure_map: cubic coefficients for a pressure mapping
+ * veikk_screen_map: region of the screen to map
  * <p>
- * Let the output pressure be P, and input pressure be p. This parameter defines
- * a3,a1,a2,a0 such that P=a3*p**3+a2*p**2+a1*p+a0, where p,P are in [0,1]. The
- * pressure function will be scaled to the full pressure input resolution as the
- * resulting pressure is being calculated. Any integer values for any/all of
- * these parameters is valid, but a callback is still available for any desired
- * processing (nothing is done in the default callback).
+ * Sets the start x, start y, width, and height of the mapped region on the
+ * screen. Should make sure veikk_screen_size is also valid. Valid values:
+ * - all zero (default mapping); or
+ * - width,height>0 (start_x,start_y can be any number)
+ * Note that if either veikk_screen_map or veikk_screen_size are all zero, then
+ * the mapping will be set to the default.
  * <p>
- * given a3,a2,a1,a0 are signed 16-bit integers (s16)
- * format: (((u64)((u16)(100*a3)))<<48) |
- *         (((u64)((u16)(100*a2)))<<32) |
- *         (((u64)((u16)(100*a1)))<<16) |
- *         (((u64)((u16)(100*a0)))<<0)
- * default: 100<<16=6553600 (linear mapping, a3=a2=a0=0, a1=1, P=p)
- * <p>
- * Note: Each coefficient is stored multiplied by 100 in a short int (16-bit)
- * representation. I.e., to represent the coefficients a3=a0=0, a1=54.64,
- * a2=2.5, the pressure_map orientation would be (5464<<32)|(250<<16). This
- * means that any coefficient in the range [-327.68:0.01:327.67] is
- * representable in this format, which should cover reasonable pressure mappings
- * (more extreme pressure mappings may not be representable like this).
+ * format: serialized struct veikk_screen_map (64 bits)
+ * default: 0 (default mapping)
  */
-u64 veikk_pressure_map = 100<<16;
-// global ease-of-use struct; note that these coefficients still have to be
-// divided by 100 and scaled to device pressure resolution later
-struct veikk_pressure_coefficients veikk_pressure_coefficients = {
-    .a3 = 0,
-    .a2 = 0,
-    .a1 = 100,
-    .a0 = 0
+static u64 veikk_screen_map_serial;
+struct veikk_rect veikk_screen_map = {
+    .x = 0,
+    .y = 0,
+    .width = 0,
+    .height = 0
 };
-static int veikk_set_pressure_map(const char *val,
-                                  const struct kernel_param *kp) {
+static int veikk_set_veikk_screen_map(const char *val,
+                                      const struct kernel_param *kp) {
     int error;
-    u64 pm;
+    u64 sm;
     struct list_head *lh;
     struct veikk *veikk;
+    struct veikk_screen_map screen_map;
 
-    if((error = kstrtoull(val, 10, &pm)))
+    if((error = kstrtoull(val, 10, &sm)))
         return error;
 
-    // no checks to perform except that it is an integral value
-    veikk_pressure_coefficients = *((struct veikk_pressure_coefficients *) &pm);
+    // check that entire number is zero, or that width, height > 0 (see desc)
+    screen_map = *(struct veikk_screen_map *)&sm;
+    if(sm && (screen_map.width<=0 || screen_map.height<=0))
+        return -EINVAL;
+
+    veikk_screen_map = (struct veikk_rect) {
+        .x = screen_map.x,
+        .y = screen_map.y,
+        .width = screen_map.width,
+        .height = screen_map.height
+    };
 
     // call device-specific handlers
     list_for_each(lh, &vdevs) {
         veikk = list_entry(lh, struct veikk, lh);
 
         // TODO: if error, revert all previous changes for consistency?
-        if((error = (*veikk->vdinfo->handle_modparm_change)(veikk, &pm,
-                                                        VEIKK_MP_PRESSURE_MAP)))
+        if((error = (*veikk->vdinfo->handle_modparm_change)(veikk, &sm,
+                                                            VEIKK_MP_SCREEN_MAP)))
             return error;
     }
     return param_set_ullong(val, kp);
 }
-static const struct kernel_param_ops veikk_pressure_map_ops = {
-    .set = veikk_set_pressure_map,
-    .get = param_get_ullong
+static const struct kernel_param_ops veikk_veikk_screen_map_ops = {
+        .set = veikk_set_veikk_screen_map,
+        .get = param_get_ullong
 };
-module_param_cb(pressure_map, &veikk_pressure_map_ops, &veikk_pressure_map,
-                0664);
+module_param_cb(screen_map, &veikk_veikk_screen_map_ops,
+                &veikk_screen_map_serial, 0664);
 /**
  * veikk_orientation: set device veikk_orientation
  * <p>
@@ -197,8 +161,8 @@ module_param_cb(pressure_map, &veikk_pressure_map_ops, &veikk_pressure_map,
  * format: the veikk_orientation number [0|1|2|3]
  * default: 0
  */
-// TODO: change this to a smaller type (i.e., u8/byte)
-u32 veikk_orientation;
+static u32 veikk_orientation_serial;
+enum veikk_orientation veikk_orientation;
 static int veikk_set_veikk_orientation(const char *val,
                                  const struct kernel_param *kp) {
     int error;
@@ -212,6 +176,8 @@ static int veikk_set_veikk_orientation(const char *val,
     // check that number is an integer in [0, 3]
     if(or > 3)
         return -ERANGE;
+
+    veikk_orientation = (enum veikk_orientation) or;
 
     // call device-specific handlers
     list_for_each(lh, &vdevs) {
@@ -228,32 +194,96 @@ static const struct kernel_param_ops veikk_orientation_ops = {
     .set = veikk_set_veikk_orientation,
     .get = param_get_uint
 };
-module_param_cb(orientation, &veikk_orientation_ops, &veikk_orientation,
+module_param_cb(orientation, &veikk_orientation_ops, &veikk_orientation_serial,
                 0664);
+/**
+ * pressure_map: cubic coefficients for a pressure mapping
+ * <p>
+ * Let the output pressure be P, and input pressure be p. This parameter defines
+ * a3,a1,a2,a0 such that P=a3*p**3+a2*p**2+a1*p+a0, where p,P are in [0,1]. The
+ * pressure function will be scaled to the full pressure input resolution as the
+ * resulting pressure is being calculated. Any integer values for any/all of
+ * these parameters is valid, but a callback is still available for any desired
+ * processing (nothing is done in the default callback).
+ * <p>
+ * given a3,a2,a1,a0 are signed 16-bit integers (s16)
+ * format: serialized struct veikk_pressure_map; in other words,
+ *         (((u64)((u16)(100*a3)))<<48) |
+ *         (((u64)((u16)(100*a2)))<<32) |
+ *         (((u64)((u16)(100*a1)))<<16) |
+ *         (((u64)((u16)(100*a0)))<<0)
+ * default: 100<<16=6553600 (linear mapping, a3=a2=a0=0, a1=1, P=p)
+ * <p>
+ * Note: Each coefficient is stored multiplied by 100 in a short int (16-bit)
+ * representation. I.e., to represent the coefficients a3=a0=0, a1=54.64,
+ * a2=2.5, the pressure_map orientation would be (5464<<32)|(250<<16). This
+ * means that any coefficient in the range [-327.68:0.01:327.67] is
+ * representable in this format, which should cover reasonable pressure mappings
+ * (more extreme pressure mappings may not be representable like this).
+ */
+static u64 veikk_pressure_map_serial = 100<<16;
+// global ease-of-use struct; note that these coefficients still have to be
+// divided by 100 and scaled to device pressure resolution later
+struct veikk_pressure_map veikk_pressure_map = {
+    .a0 = 0,
+    .a1 = 100,
+    .a2 = 0,
+    .a3 = 0
+};
+static int veikk_set_pressure_map(const char *val,
+                                  const struct kernel_param *kp) {
+    int error;
+    u64 pm;
+    struct list_head *lh;
+    struct veikk *veikk;
+
+    if((error = kstrtoull(val, 10, &pm)))
+        return error;
+
+    // no checks to perform except that it is an integral value
+    veikk_pressure_map = *((struct veikk_pressure_map *) &pm);
+
+    // call device-specific handlers
+    list_for_each(lh, &vdevs) {
+        veikk = list_entry(lh, struct veikk, lh);
+
+        // TODO: if error, revert all previous changes for consistency?
+        if((error = (*veikk->vdinfo->handle_modparm_change)(veikk, &pm,
+                                                            VEIKK_MP_PRESSURE_MAP)))
+            return error;
+    }
+    return param_set_ullong(val, kp);
+}
+static const struct kernel_param_ops veikk_pressure_map_ops = {
+        .set = veikk_set_pressure_map,
+        .get = param_get_ullong
+};
+module_param_cb(pressure_map, &veikk_pressure_map_ops,
+                &veikk_pressure_map_serial, 0664);
 
 // TODO: module parameter(s) for stylus buttons
 
 // HELPER FUNCTIONS CORRESPONDING TO THE DESCRIPTIONS ABOVE
 // screen size to struct veikk rect
-static struct veikk_rect veikk_ss_to_rect(u32 ss) {
-    struct veikk_rect rect = {
-        .x_start = 0,
-        .y_start = 0,
-        .width = (u16)(ss>>16),
-        .height = (u16)ss
-    };
-    return rect;
-}
-// screen map to struct veikk_rect
-static struct veikk_rect veikk_sm_to_rect(u64 sm) {
-    struct veikk_rect rect = {
-        .x_start = (u16)(sm>>48),
-        .y_start = (u16)(sm>>32),
-        .width = (u16)(sm>>16),
-        .height = (u16)sm
-    };
-    return rect;
-}
+//static struct veikk_rect veikk_ss_to_rect(u32 ss) {
+//    struct veikk_rect rect = {
+//        .x = 0,
+//        .y = 0,
+//        .width = (u16)(ss>>16),
+//        .height = (u16)ss
+//    };
+//    return rect;
+//}
+//// screen map to struct veikk_rect
+//static struct veikk_rect veikk_sm_to_rect(u64 sm) {
+//    struct veikk_rect rect = {
+//        .x = (u16)(sm>>48),
+//        .y = (u16)(sm>>32),
+//        .width = (u16)(sm>>16),
+//        .height = (u16)sm
+//    };
+//    return rect;
+//}
 /**
  * Helper to perform calculations given screen size/screen map/veikk_orientation,
  * calculating x/y bounds, axes, and directions based on the parameters, so that
@@ -269,47 +299,49 @@ static struct veikk_rect veikk_sm_to_rect(u64 sm) {
  * - y_map_axis:    same as above, but for tablet's y-axis
  * - map_rect:      dimensions
  */
-void veikk_configure_input_devs(u64 sm, u32 ss, enum veikk_orientation or,
+void veikk_configure_input_devs(struct veikk_rect ss,
+                                struct veikk_rect sm,
+                                enum veikk_orientation or,
                                 struct veikk *veikk) {
-    struct veikk_rect ss_rect, sm_rect;
-
     // set veikk_orientation parameters
     veikk->x_map_axis = (or==VEIKK_OR_DFL||or==VEIKK_OR_FLIP) ? ABS_X : ABS_Y;
     veikk->y_map_axis = (or==VEIKK_OR_DFL||or==VEIKK_OR_FLIP) ? ABS_Y : ABS_X;
     veikk->x_map_dir = (or==VEIKK_OR_DFL||or==VEIKK_OR_CW) ? 1 : -1;
     veikk->y_map_dir = (or==VEIKK_OR_DFL||or==VEIKK_OR_CCW) ? 1 : -1;
 
-    // if either sm or ss is all zeroes, then map to full screen (default
-    // mapping; see description for veikk_screen_size and veikk_screen_map)
-    if(!ss || !sm) {
-        // setting veikk_screen_map equal to veikk_screen_size makes the default
-        // mapping
-        ss = (u32) ((1<<16)|1);
-        sm = (u64) ss;
+    // if either sm or ss has zero dimensions, or if sm equal to ss then map t
+    // full screen (default mapping; see description for veikk_screen_size and
+    // veikk_screen_map)
+    if(!sm.width || !sm.height || !ss.width || !ss.height) {
+        veikk->map_rect = (struct veikk_rect) {
+            .x = 0,
+            .y = 0,
+            .width = veikk->vdinfo->x_max,
+            .height = veikk->vdinfo->y_max
+        };
+        return;
     }
 
     // perform the necessary arithmetic based on veikk_orientation to calculate
     // bounds for input_dev
     // TODO: document these calculations
-    ss_rect = veikk_ss_to_rect(ss);
-    sm_rect = veikk_sm_to_rect(sm);
     veikk->map_rect = (struct veikk_rect) {
-        .x_start = -(veikk->x_map_axis==ABS_X
-                        ? (sm_rect.x_start+(veikk->x_map_dir<0)*sm_rect.width)
-                            * veikk->vdinfo->x_max/sm_rect.width
-                        : (sm_rect.y_start+(veikk->x_map_dir<0)*sm_rect.height)
-                            * veikk->vdinfo->x_max/sm_rect.height),
-        .y_start = -(veikk->y_map_axis==ABS_X
-                        ? (sm_rect.x_start+(veikk->y_map_dir<0)*sm_rect.width)
-                            * veikk->vdinfo->y_max/sm_rect.width
-                        : (sm_rect.y_start+(veikk->y_map_dir<0)*sm_rect.height)
-                            * veikk->vdinfo->y_max/sm_rect.height),
+        .x = -(veikk->x_map_axis==ABS_X
+                        ? (sm.x+(veikk->x_map_dir<0)*sm.width)
+                            * veikk->vdinfo->x_max/sm.width
+                        : (sm.y+(veikk->x_map_dir<0)*sm.height)
+                            * veikk->vdinfo->x_max/sm.height),
+        .y = -(veikk->y_map_axis==ABS_X
+                        ? (sm.x+(veikk->y_map_dir<0)*sm.width)
+                            * veikk->vdinfo->y_max/sm.width
+                        : (sm.y+(veikk->y_map_dir<0)*sm.height)
+                            * veikk->vdinfo->y_max/sm.height),
         .width = veikk->x_map_axis==ABS_X
-                    ? ss_rect.width*veikk->vdinfo->x_max/sm_rect.width
-                    : ss_rect.height*veikk->vdinfo->x_max/sm_rect.height,
+                    ? ss.width*veikk->vdinfo->x_max/sm.width
+                    : ss.height*veikk->vdinfo->x_max/sm.height,
         .height = veikk->y_map_axis==ABS_X
-                 ? ss_rect.width*veikk->vdinfo->y_max/sm_rect.width
-                 : ss_rect.height*veikk->vdinfo->y_max/sm_rect.height
+                 ? ss.width*veikk->vdinfo->y_max/sm.width
+                 : ss.height*veikk->vdinfo->y_max/sm.height
     };
 }
 /**
@@ -327,7 +359,7 @@ void veikk_configure_input_devs(u64 sm, u32 ss, enum veikk_orientation or,
  * returned as a signed 32-bit integer (int).
  */
 int veikk_map_pressure(s64 pres, s64 pres_max,
-                       struct veikk_pressure_coefficients *coef) {
+                       struct veikk_pressure_map *coef) {
     static const int sf = 100;  // constant scale factor of 100 for all coefs
     return (s32) (((coef->a3*pres*pres*pres/pres_max/pres_max)
                  + (coef->a2*pres*pres/pres_max)

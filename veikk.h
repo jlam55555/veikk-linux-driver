@@ -27,24 +27,35 @@ enum veikk_modparm {
     VEIKK_MP_PRESSURE_MAP,
     VEIKK_MP_ORIENTATION
 };
-// supported orientations
+
+// generic struct for representing rectangular geometries (physical/mappings)
+// currently only used for
+struct veikk_rect {
+    s32 x, y;
+    u32 width, height;
+};
+
+// structure of module parameters (module parameters are just integer-serialized
+// versions of these structs); used to easily deserialize module parameters,
+// but easier and more consistent to represent everything with struct veikk_rect
+// for general use
+struct veikk_screen_size {
+    u16 width, height;
+};
+struct veikk_screen_map {
+    s16 x, y;
+    u16 width, height;
+};
+struct veikk_pressure_map {
+    s16 a0, a1, a2, a3;
+};
 enum veikk_orientation {
     VEIKK_OR_DFL=0,
     VEIKK_OR_CCW,
     VEIKK_OR_FLIP,
     VEIKK_OR_CW
 };
-// struct for representing rectangular geometries (physical/mappings)
-struct veikk_rect {
-    u32 x_start, y_start, width, height;
-};
-// struct for representing (cubic) pressure map coefficients, semantically,
-// i.e., P=a3*p**3+a2*p**2+a1*p+a0; see notes in veikk_modparms.c because these
-// coefficients are not exactly ready to be used as-is, need to be scaled first.
-// note that order matters, based on formatted (and little-endianness)
-struct veikk_pressure_coefficients {
-    s16 a0, a1, a2, a3;
-};
+
 // pen input report -- structure of input report from tablet
 struct veikk_pen_report {
     u8 report_id;
@@ -102,17 +113,23 @@ void veikk_input_close(struct input_dev *dev);
 extern const struct hid_device_id veikk_ids[];
 
 // from veikk_modparms.c
-extern u64 veikk_screen_map;
-extern u32 veikk_screen_size;
-extern u64 veikk_pressure_map;
-extern struct veikk_pressure_coefficients veikk_pressure_coefficients;
-extern u32 veikk_orientation;
+extern struct veikk_rect veikk_screen_map;
+extern struct veikk_rect veikk_screen_size;
+extern enum veikk_orientation veikk_orientation;
+extern struct veikk_pressure_map veikk_pressure_map;
+//extern u64 veikk_screen_map;
+//extern u32 veikk_screen_size;
+//extern u64 veikk_pressure_map;
+//extern struct veikk_pressure_map veikk_pressure_map;
+//extern u32 veikk_orientation;
 
 // module parameter (configuration) helper
-void veikk_configure_input_devs(u64 sm, u32 ss, enum veikk_orientation or,
+void veikk_configure_input_devs(struct veikk_rect ss,
+                                struct veikk_rect sm,
+                                enum veikk_orientation or,
                                 struct veikk *veikk);
 
 // calculate pressure map -- for use in raw_event handler
 int veikk_map_pressure(s64 pres, s64 pres_max,
-                       struct veikk_pressure_coefficients *coef);
+                       struct veikk_pressure_map *coef);
 #endif
