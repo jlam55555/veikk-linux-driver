@@ -280,18 +280,16 @@ void veikk_configure_input_devs(struct veikk_rect ss,
     veikk->x_map_dir = (or==VEIKK_OR_DFL||or==VEIKK_OR_CW) ? 1 : -1;
     veikk->y_map_dir = (or==VEIKK_OR_DFL||or==VEIKK_OR_CCW) ? 1 : -1;
 
-    // if either sm or ss has zero dimensions, or if sm equal to ss then map t
+    // if either sm or ss has zero dimensions, or if sm equal to ss then map to
     // full screen (default mapping; see description for veikk_screen_size and
     // veikk_screen_map)
-    if(!sm.width || !sm.height || !ss.width || !ss.height) {
-        veikk->map_rect = (struct veikk_rect) {
+    if(!sm.width || !sm.height || !ss.width || !ss.height)
+        sm = ss = (struct veikk_rect) {
             .x = 0,
             .y = 0,
-            .width = veikk->vdinfo->x_max,
-            .height = veikk->vdinfo->y_max
+            .width = 1,
+            .height = 1
         };
-        return;
-    }
 
     // perform the necessary arithmetic based on veikk_orientation to calculate
     // bounds for input_dev
