@@ -13,8 +13,10 @@ clean:
 install:
 	make -C $(BUILD_DIR) M=$(CURDIR) modules_install
 	modprobe veikk
+	echo "veikk" > /etc/modules-load.d/veikk.conf
 
 uninstall:
 	modprobe -r $(MOD_NAME)
-	rm $(shell modinfo -n veikk)
+	rm -f $(shell modinfo -n veikk)
+	rm -f /etc/modprobe.d/$(MOD_NAME).conf /etc/modules-load.d/$(MOD_NAME).conf
 	depmod
