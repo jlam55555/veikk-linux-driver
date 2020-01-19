@@ -5,7 +5,7 @@
  */
 
 #ifndef VEIKK_H
-#define VEIKK_H /*empty*/
+#define VEIKK_H
 
 #include <linux/hid.h>
 #include <linux/input.h>
@@ -17,11 +17,13 @@
 #define VEIKK_DRIVER_VERSION    "2.0"
 #define VEIKK_DRIVER_AUTHOR     "Jonathan Lam <jlam55555@gmail.com>"
 #define VEIKK_DRIVER_DESC       "USB VEIKK drawing tablet driver"
+#define VEIKK_DRIVER_LICENSE    "GPL"
 
 #define VEIKK_PEN_REPORT        0x0001
 
 // supported module parameter types
-// TODO: currently not used; may remove in future
+// TODO: currently not used; may remove in future; however, is used in the
+//       configuration tool
 enum veikk_modparm {
     VEIKK_MP_SCREEN_MAP,
     VEIKK_MP_SCREEN_SIZE,

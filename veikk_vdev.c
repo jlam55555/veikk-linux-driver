@@ -24,8 +24,8 @@ static int veikk_s640_alloc_input_devs(struct veikk *veikk) {
         return -ENOMEM;
 
     if (!(veikk->pen_input = devm_input_allocate_device(&hdev->dev))) {
+        devres_release_group(&hdev->dev, veikk);
         return -ENOMEM;
-        // TODO: cleanup
     }
 
     devres_close_group(&hdev->dev, veikk);
@@ -58,9 +58,10 @@ static int veikk_s640_setup_and_register_input_devs(struct veikk *veikk) {
     // veikk_screen_map and veikk_screen_size module parameters; this doesn't
     // actually configures input devs, but configures the parameters in the
     // struct veikk to use later when configuring input_devs; see comments
-    // before function declaration
-    // TODO: put under spinlock
-    // TODO: document concurrency issues with modparms
+    // before function declaration; small possible concurrency issue with the
+    // global parameters being modified as they are copied to these function
+    // parameters
+    // TODO: fix concurrency issue (add spinlock for any global modparm changes)
     veikk_configure_input_devs(veikk_screen_size, veikk_screen_map,
                                veikk_orientation, veikk);
 
@@ -77,7 +78,6 @@ static int veikk_s640_setup_and_register_input_devs(struct veikk *veikk) {
                          veikk->map_rect.x+veikk->map_rect.width, 0, 0);
     input_set_abs_params(pen_input, veikk->y_map_axis, veikk->map_rect.y,
                          veikk->map_rect.y+veikk->map_rect.height, 0, 0);
-    // TODO: work on pressure mapping
     input_set_abs_params(pen_input, ABS_PRESSURE, 0,
                          veikk->vdinfo->pressure_max, 0, 0);
 
@@ -145,7 +145,6 @@ static int veikk_s640_handle_modparm_change(struct veikk *veikk) {
     }
 
     // re-register device
-    // TODO: deal with error codes more efficiently
     if((error = (*veikk->vdinfo->setup_and_register_input_devs)(veikk))) {
         hid_err(veikk->hdev, "setup_and_register_input_devs failed\n");
         return error;

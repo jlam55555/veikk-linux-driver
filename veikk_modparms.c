@@ -7,12 +7,10 @@
  * specific handler (in the struct veikk_device_info). See the comments for each
  * module parameter and its formatting in sysfs.
  * <p>
- * For now, all Veikk devices using this driver will have the same parameters.
+ * For now, all Veikk devices using this driver will use the same parameters.
  *
  * TODO: have more customization options for multiple attached Veikk devices.
  *       e.g., device-specific module parameters? e.g., ones for gesture pad
- * TODO: create a tool to enable options on startup.
- * TODO: worry about concurrency issues/locking
  */
 
 #include <linux/moduleparam.h>
@@ -268,7 +266,9 @@ module_param_cb(pressure_map, &veikk_pressure_map_ops,
  * calculating x/y bounds, axes, and directions based on the parameters, so that
  * not much further calculation needs to be done on registering inputs and
  * handling input reports. See veikk_s640_setup_and_register_input_devs and
- * veikk_s640_handle_raw_data for usage examples.
+ * veikk_s640_handle_raw_data for usage examples. Can pass in custom parms to
+ * avoid using the global ones (but for now, this function only called with
+ * the global ones).
  * <p>
  * In particular, this sets the following settings of the provided struct veikk:
  * - x_map_axis:    ABS_X if the tablet's x-axis maps to screen's +/- x-axis,

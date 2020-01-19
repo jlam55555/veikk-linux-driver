@@ -38,17 +38,17 @@ static int veikk_probe(struct hid_device *hdev,
 
     if((error = (*veikk->vdinfo->alloc_input_devs)(veikk))) {
         hid_err(hdev, "alloc_input_devs failed\n");
-        goto fail;
+        return error;
     }
 
     if((error = (*veikk->vdinfo->setup_and_register_input_devs)(veikk))) {
         hid_err(hdev, "setup_and_register_input_devs failed\n");
-        goto fail;
+        return error;
     }
 
     if((error = hid_hw_start(hdev, HID_CONNECT_HIDRAW|HID_CONNECT_DRIVER))) {
         hid_err(hdev, "hw start failed\n");
-        goto fail;
+        return error;
     }
 
     // add to vdevs
@@ -58,10 +58,6 @@ static int veikk_probe(struct hid_device *hdev,
 
     hid_info(veikk->hdev, "%s probed successfully.\n", veikk->vdinfo->name);
     return 0;
-
-fail:
-    // TODO: release resources
-    return error;
 }
 
 static void veikk_remove(struct hid_device *hdev) {
@@ -121,8 +117,7 @@ static struct hid_driver veikk_driver = {
 };
 module_hid_driver(veikk_driver);
 
-// TODO: add other metadata (MODULE_VERSION, MODULE_AUTHOR, MODULE_DESCRIPTION,
 MODULE_VERSION(VEIKK_DRIVER_VERSION);
 MODULE_AUTHOR(VEIKK_DRIVER_AUTHOR);
 MODULE_DESCRIPTION(VEIKK_DRIVER_DESC);
-MODULE_LICENSE("GPL");
+MODULE_LICENSE(VEIKK_DRIVER_LICENSE);
