@@ -35,13 +35,13 @@ If you are getting a `Required key not available` error, please see
 
 Check out the [issues tab][5] for known setup issues and solutions.
 
+##### AUR (dkms) package
+Thanks to [@artixnous][7], this driver is available as an AUR package with
+`dkms`! See [input-veikk-dkms<sup>AUR</sup>][8].
+
 ##### Uninstallation
     sudo make uninstall
-    
-##### v1.0 installation
-Thanks to [@artixnous][7], v1.0 of this driver is available as an AUR package!
-See [input-veikk-dkms<sup>AUR</sup>][8].
-    
+        
 ---
 
 ### Configuration
