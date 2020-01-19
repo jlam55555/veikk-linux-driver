@@ -13,12 +13,13 @@ from the [Wacom driver for Linux][1].
 Currently, a set of basic basic digitizer features are supported, such as:
 - Full range and resolution for tablet pressure and spatial sensitivity
 - Configurable screen mapping, orientation, and (cubic) pressure mapping
+- Driver (using `/etc/modules-load.d/`) and options (using `/etc/modprobe.d`)
+  persist after reboots
 
 More features are planned for the near future, such as:
 - Button remapping
 - Support for gesture pads and additional buttons (model-dependent)
 - Device/model-specific configuration options
-- A UI to configure options and enable options on boot (persistent options)
 
 ---
 
@@ -37,7 +38,8 @@ Check out the [issues tab][5] for known setup issues and solutions.
 
 ##### AUR (dkms) package
 Thanks to [@artixnous][7], this driver is available as an AUR package with
-`dkms`! See [input-veikk-dkms<sup>AUR</sup>][8].
+`dkms`! See [input-veikk-dkms<sup>AUR</sup>][8]. Make sure to run
+`modprobe veikk` after installation to load the driver.
 
 ##### Uninstallation
     sudo make uninstall
