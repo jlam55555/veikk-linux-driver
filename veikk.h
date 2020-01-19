@@ -106,6 +106,7 @@ struct veikk {
 
 // from veikk_drv.c
 extern struct list_head vdevs;
+extern struct mutex vdevs_mutex;
 int veikk_input_open(struct input_dev *dev);
 void veikk_input_close(struct input_dev *dev);
 

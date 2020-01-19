@@ -68,6 +68,7 @@ static int veikk_set_veikk_screen_size(const char *val,
     };
 
     // call device-specific handlers
+    mutex_lock(&vdevs_mutex);
     list_for_each(lh, &vdevs) {
         veikk = list_entry(lh, struct veikk, lh);
 
@@ -75,6 +76,7 @@ static int veikk_set_veikk_screen_size(const char *val,
         if((error = (*veikk->vdinfo->handle_modparm_change)(veikk)))
             return error;
     }
+    mutex_unlock(&vdevs_mutex);
     return param_set_uint(val, kp);
 }
 static const struct kernel_param_ops veikk_veikk_screen_size_ops = {
@@ -127,6 +129,7 @@ static int veikk_set_veikk_screen_map(const char *val,
     };
 
     // call device-specific handlers
+    mutex_lock(&vdevs_mutex);
     list_for_each(lh, &vdevs) {
         veikk = list_entry(lh, struct veikk, lh);
 
@@ -134,6 +137,7 @@ static int veikk_set_veikk_screen_map(const char *val,
         if((error = (*veikk->vdinfo->handle_modparm_change)(veikk)))
             return error;
     }
+    mutex_unlock(&vdevs_mutex);
     return param_set_ullong(val, kp);
 }
 static const struct kernel_param_ops veikk_veikk_screen_map_ops = {
@@ -174,6 +178,7 @@ static int veikk_set_veikk_orientation(const char *val,
     veikk_orientation = (enum veikk_orientation) or;
 
     // call device-specific handlers
+    mutex_lock(&vdevs_mutex);
     list_for_each(lh, &vdevs) {
         veikk = list_entry(lh, struct veikk, lh);
 
@@ -181,6 +186,7 @@ static int veikk_set_veikk_orientation(const char *val,
         if((error = (*veikk->vdinfo->handle_modparm_change)(veikk)))
             return error;
     }
+    mutex_unlock(&vdevs_mutex);
     return param_set_uint(val, kp);
 }
 static const struct kernel_param_ops veikk_orientation_ops = {
@@ -237,6 +243,7 @@ static int veikk_set_pressure_map(const char *val,
     veikk_pressure_map = *((struct veikk_pressure_map *) &pm);
 
     // call device-specific handlers
+    mutex_lock(&vdevs_mutex);
     list_for_each(lh, &vdevs) {
         veikk = list_entry(lh, struct veikk, lh);
 
@@ -244,6 +251,7 @@ static int veikk_set_pressure_map(const char *val,
         if((error = (*veikk->vdinfo->handle_modparm_change)(veikk)))
             return error;
     }
+    mutex_unlock(&vdevs_mutex);
     return param_set_ullong(val, kp);
 }
 static const struct kernel_param_ops veikk_pressure_map_ops = {

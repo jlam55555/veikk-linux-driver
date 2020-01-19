@@ -4,9 +4,9 @@
 #include <linux/module.h>
 #include "veikk.h"
 
-// TODO: add spinlock for this
 // this stores all connected devices (is a circ. dll of struct veikk)
 LIST_HEAD(vdevs);
+DEFINE_MUTEX(vdevs_mutex);
 
 // veikk_input_open/close are used for the input_dev open/close events, never
 // called directly
@@ -32,11 +32,6 @@ static int veikk_probe(struct hid_device *hdev,
     veikk->hdev = hdev;
     veikk->vdinfo = (struct veikk_device_info *) id->driver_data;
 
-    // TODO: set quirks? probably not necessary
-    // TODO: set up workqueue interface? doesn't seem necessary
-    // TODO: allocate pen fifo? doesn't seem necessary
-    // TODO: does this part have to done under a mutex? doesn't seem necessary
-
     // load/parse report descriptor
     if((error = hid_parse(hdev)))
         return error;
@@ -57,8 +52,9 @@ static int veikk_probe(struct hid_device *hdev,
     }
 
     // add to vdevs
-    // TODO: do under spinlock
+    mutex_lock(&vdevs_mutex);
     list_add(&veikk->lh, &vdevs);
+    mutex_unlock(&vdevs_mutex);
 
     hid_info(veikk->hdev, "%s probed successfully.\n", veikk->vdinfo->name);
     return 0;
@@ -74,14 +70,10 @@ static void veikk_remove(struct hid_device *hdev) {
     hid_hw_close(hdev);
     hid_hw_stop(hdev);
 
-    // TODO: clean up workqueues (if applicable)
-    // TODO: free resources (e.g., pen_fifo) if applicable
-
-    // TODO: remove drvdata from hid
-
     // remove from vdevs
-    // TODO: do under spinlock
+    mutex_lock(&vdevs_mutex);
     list_del(&veikk->lh);
+    mutex_unlock(&vdevs_mutex);
 
     hid_info(veikk->hdev, "%s removed.\n", veikk->vdinfo->name);
 }
