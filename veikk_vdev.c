@@ -185,6 +185,14 @@ struct veikk_device_info veikk_device_info_0x0003 = {
     .handle_raw_data = veikk_s640_handle_raw_data,
     .handle_modparm_change = veikk_s640_handle_modparm_change
 };
+struct veikk_device_info veikk_device_info_0x0004 = {
+    .name = "VEIKK A15 Pen", .prod_id = 0x004,
+    .x_max = 32768, .y_max = 32768, .pressure_max = 8192,
+    .setup_and_register_input_devs = veikk_s640_setup_and_register_input_devs,
+    .alloc_input_devs = veikk_s640_alloc_input_devs,
+    .handle_raw_data = veikk_s640_handle_raw_data,
+    .handle_modparm_change = veikk_s640_handle_modparm_change
+};
 /** END struct veikk_device LIST **/
 
 #define VEIKK_DEVICE(prod)\
@@ -194,6 +202,7 @@ const struct hid_device_id veikk_ids[] = {
     { VEIKK_DEVICE(0x0001) },
     { VEIKK_DEVICE(0x0002) },
     { VEIKK_DEVICE(0x0003) },
+    { VEIKK_DEVICE(0x0004) },
     // TODO: add more devices here
     {}
 };
