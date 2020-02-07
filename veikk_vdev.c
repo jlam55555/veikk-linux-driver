@@ -98,12 +98,17 @@ static int veikk_s640_handle_raw_data(struct veikk *veikk, u8 *data, int size,
 
     switch(report_id) {
     case VEIKK_PEN_REPORT:
+    case VEIKK_STYLUS_REPORT:
         // validate size
         if(size != sizeof(struct veikk_pen_report))
             return -EINVAL;
 
         // dispatch events with input_dev
         pen_report = (struct veikk_pen_report *) data;
+
+        // TODO: remove
+        printk("%u %u %u\n",pen_report->x, pen_report->y, pen_report->pressure);
+
         input_report_abs(pen_input, veikk->x_map_axis,
                          veikk->x_map_dir*pen_report->x);
         input_report_abs(pen_input, veikk->y_map_axis,
@@ -193,16 +198,25 @@ struct veikk_device_info veikk_device_info_0x0004 = {
     .handle_raw_data = veikk_s640_handle_raw_data,
     .handle_modparm_change = veikk_s640_handle_modparm_change
 };
+struct veikk_device_info veikk_device_info_0x1001 = {
+    .name = "VEIKK VK1560 Pen", .prod_id = 0x1001,
+    .x_max = 27536, .y_max = 15489, .pressure_max = 8192,
+    .setup_and_register_input_devs = veikk_s640_setup_and_register_input_devs,
+    .alloc_input_devs = veikk_s640_alloc_input_devs,
+    .handle_raw_data = veikk_s640_handle_raw_data,
+    .handle_modparm_change = veikk_s640_handle_modparm_change
+};
 /** END struct veikk_device LIST **/
 
 #define VEIKK_DEVICE(prod)\
     HID_USB_DEVICE(VEIKK_VENDOR_ID, prod),\
     .driver_data = (long unsigned int) &veikk_device_info_##prod
 const struct hid_device_id veikk_ids[] = {
-    { VEIKK_DEVICE(0x0001) },
-    { VEIKK_DEVICE(0x0002) },
-    { VEIKK_DEVICE(0x0003) },
-    { VEIKK_DEVICE(0x0004) },
+    { VEIKK_DEVICE(0x0001) },   // S640
+    { VEIKK_DEVICE(0x0002) },   // A30
+    { VEIKK_DEVICE(0x0003) },   // A50
+    { VEIKK_DEVICE(0x0004) },   // A15
+    { VEIKK_DEVICE(0x1001) },   // VK1560
     // TODO: add more devices here
     {}
 };

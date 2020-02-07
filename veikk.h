@@ -20,6 +20,7 @@
 #define VEIKK_DRIVER_LICENSE    "GPL"
 
 #define VEIKK_PEN_REPORT        0x0001
+#define VEIKK_STYLUS_REPORT     0x0002  // equivalent to pen report
 
 // supported module parameter types
 // TODO: currently not used; may remove in future; however, is used in the
