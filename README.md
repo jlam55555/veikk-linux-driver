@@ -84,7 +84,7 @@ at gmail dot com.
 [0]: https://www.veikk.com/
 [1]: https://github.com/torvalds/linux/blob/master/drivers/hid/wacom_wac.c
 [2]: https://twitter.com/jlam55555/status/1138285016209854464?s=20
-[3]: http://eis.jonlamdev.com/posts/on-developing-a-linux-driver
+[3]: https://everything-is-sheep.herokuapp.com/posts/on-developing-a-linux-driver
 [4]: https://askubuntu.com/questions/554624/how-to-resolve-the-lib-modules-3-13-0-27-generic-build-no-such-file-or-direct
 [5]: https://github.com/jlam55555/veikk-s640-driver/issues
 [6]: https://github.com/jlam55555/veikk-linux-driver/issues/3
