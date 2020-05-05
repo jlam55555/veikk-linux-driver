@@ -12,6 +12,7 @@ clean:
 
 install:
 	make -C $(BUILD_DIR) M=$(CURDIR) modules_install
+	mkdir -p /etc/modules-load.d
 	modprobe veikk
 	echo "veikk" > /etc/modules-load.d/veikk.conf
 
