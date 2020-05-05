@@ -84,27 +84,27 @@ static int veikk_raw_event(struct hid_device *hdev, struct hid_report *report,
 
 // read input reports; for experimenting only; see veikk_raw_event for regular
 // input report handling
-void veikk_report(struct hid_device *hdev, struct hid_report *report) {
-    int i, j;
-    struct hid_field *field;
-    struct hid_usage *usage;
-
-    hid_info(hdev, "parsing report: %d %d %d %d %d\n",
-             report->id, report->type, report->application, report->maxfield,
-             report->size);
-
-    for(i=0; i<report->maxfield; i++) {
-        for(j=0; j<report->field[i]->maxusage; j++) {
-            field = report->field[i];
-            usage = &field->usage[j];
-
-            // TODO: read/print actual data at these offsets
-            hid_info(hdev, "field %d usage %d: %x; offset: %d; size: %d\n",
-                           i, j, usage->hid, field->report_offset,
-                           field->report_size);
-        }
-    }
-}
+//void veikk_report(struct hid_device *hdev, struct hid_report *report) {
+//    int i, j;
+//    struct hid_field *field;
+//    struct hid_usage *usage;
+//
+//    hid_info(hdev, "parsing report: %d %d %d %d %d\n",
+//             report->id, report->type, report->application, report->maxfield,
+//             report->size);
+//
+//    for(i=0; i<report->maxfield; i++) {
+//        for(j=0; j<report->field[i]->maxusage; j++) {
+//            field = report->field[i];
+//            usage = &field->usage[j];
+//
+//            // TODO: read/print actual data at these offsets
+//            hid_info(hdev, "field %d usage %d: %x; offset: %d; size: %d\n",
+//                           i, j, usage->hid, field->report_offset,
+//                           field->report_size);
+//        }
+//    }
+//}
 
 /* Register module */
 static struct hid_driver veikk_driver = {
