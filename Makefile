@@ -12,8 +12,9 @@ clean:
 
 install:
 	make -C $(BUILD_DIR) M=$(CURDIR) modules_install
-	mkdir -p /etc/modules-load.d
+	depmod
 	modprobe veikk
+	mkdir -p /etc/modules-load.d
 	echo "veikk" > /etc/modules-load.d/veikk.conf
 
 uninstall:
