@@ -270,10 +270,14 @@ static int veikk_register_input(struct hid_device *hid_dev)
 		__set_bit(BTN_STYLUS, input->keybit);
 		__set_bit(BTN_STYLUS2, input->keybit);
 
+		// set abs params so it's recognized by evdev, but fill with
+		// bogus values to indicate that these events are invalid
 		__set_bit(EV_ABS, input->evbit);
-		input_set_abs_params(input, ABS_X, 0, 0, 0, 0);
-		input_set_abs_params(input, ABS_Y, 0, 0, 0, 0);
-		input_set_abs_params(input, ABS_PRESSURE, 0, 0, 0, 0);
+		input_set_abs_params(input, ABS_X, 0, 1, 0, 0);
+		input_set_abs_params(input, ABS_Y, 0, 1, 0, 0);
+		input_set_abs_params(input, ABS_PRESSURE, 0, 1, 0, 0);
+		input_abs_set_res(input, ABS_X, 1);
+		input_abs_set_res(input, ABS_Y, 1);
 	} else {
 		// if device type == VEIKK_KEYBOARD and no buttons, may
 		// be needed in some rare possible edge case, given the
