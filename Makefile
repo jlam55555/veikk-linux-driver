@@ -1,24 +1,21 @@
-MOD_NAME := veikk
-BUILD_DIR := /lib/modules/$(shell uname -r)/build
+ifneq ($(KERNELRELEASE),)
+	obj-m := veikk.o
+	veikk-objs := hid-veikk.o
 
-obj-m := $(MOD_NAME).o
-$(MOD_NAME)-objs := veikk_drv.o veikk_vdev.o veikk_modparms.o
+else
+	KDIR ?= /lib/modules/$(shell uname -r)/build
 
 all:
-	make -C $(BUILD_DIR) M=$(CURDIR) modules
-
-clean:
-	make -C $(BUILD_DIR) M=$(CURDIR) clean
+	$(MAKE) -C $(KDIR) M=$(CURDIR) modules
 
 install:
-	make -C $(BUILD_DIR) M=$(CURDIR) modules_install
-	depmod
+	$(MAKE) -C $(KDIR) M=$(CURDIR) modules_install
 	modprobe veikk
-	mkdir -p /etc/modules-load.d
-	echo "veikk" > /etc/modules-load.d/veikk.conf
+
+clean:
+	$(MAKE) -C $(KDIR) M=$(CURDIR) clean
 
 uninstall:
-	modprobe -r $(MOD_NAME)
-	rm -f $(shell modinfo -n veikk)
-	rm -f /etc/modprobe.d/$(MOD_NAME).conf /etc/modules-load.d/$(MOD_NAME).conf
-	depmod
+	modprobe -r veikk
+	
+endif
