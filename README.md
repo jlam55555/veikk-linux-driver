@@ -1,3 +1,6 @@
+**Note: v3 is in the works! See the v3-alpha branch if you'd like to help
+test or contribute.**
+
 # VEIKK Linux Driver
 A driver for [VEIKK][0]-brand digitizers/drawing tablets using the `usbhid` API.
 Configuration options are exposed in sysfs and configurable with an associated
@@ -80,6 +83,7 @@ at gmail dot com.
 ### Media
 - [Original tweet][2]
 - [Original blog post][3]
+- [v3 update blog post][v3-update-blog-post]
     
 [0]: https://www.veikk.com/
 [1]: https://github.com/torvalds/linux/blob/master/drivers/hid/wacom_wac.c
@@ -93,3 +97,4 @@ at gmail dot com.
 [9]: ./veikk_modparms.c
 [10]: https://github.com/jlam55555/veikk-linux-driver-gui
 [11]: https://i.imgur.com/Mug8gRn.jpg
+[v3-update-blog-post]: http://everything-is-sheep.herokuapp.com/posts/veikk-linux-driver-v3-notes
