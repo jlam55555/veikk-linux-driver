@@ -83,6 +83,7 @@ sudo make uninstall
 ### Media
 - [Original tweet][2]
 - [Original blog post][3]
+- [v3 update blog post][v3-update-blog-post]
 
 ---
 
@@ -103,4 +104,4 @@ jonlamdev at gmail dot com
 [11]: https://i.imgur.com/Mug8gRn.jpg
 [code-style]: https://www.kernel.org/doc/html/v5.7/process/coding-style.html
 [role-device-drivers]: https://static.lwn.net/images/pdf/LDD3/ch01.pdf
-
+[v3-update-blog-post]: http://everything-is-sheep.herokuapp.com/posts/veikk-linux-driver-v3-notes
