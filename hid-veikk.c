@@ -155,9 +155,12 @@ static enum veikk_hid_type veikk_identify_device(struct hid_device *hid_dev)
 	unsigned int rsize = hid_dev->dev_rsize, i;
 
 	// TODO: remove; print out device report descriptor
-	//hid_info(hid_dev, "DEV RDESC (len %d)", rsize);
-	//for (i = 0; i < rsize; i++)
-	//	printk("%x ", rdesc[i]);
+	#ifdef VEIKK_DEBUG_MODE
+	hid_info(hid_dev, "DEV RDESC (len %d)", rsize);
+	for (i = 0; i < rsize; i++)
+		printk(KERN_CONT "%x ", rdesc[i]);
+	printk("");
+	#endif	// VEIKK_DEBUG_MODE
 
 	// just to be safe
 	if (rsize < 3)
@@ -239,6 +242,8 @@ static int veikk_register_input(struct hid_device *hid_dev)
 			return -ENOMEM;
 		sprintf(input_name, "%s Keyboard", veikk_dev->model->name);
 		input->name = input_name;
+
+		__set_bit(INPUT_PROP_BUTTONPAD, input->propbit);
 
 		__set_bit(EV_KEY, input->evbit);
 		__set_bit(EV_MSC, input->evbit);
