@@ -10,7 +10,7 @@
 #include <linux/usb.h>
 
 // comment the following line to disable debugging output in kernel log (dmesg)
-#define VEIKK_DEBUG_MODE	1
+//#define VEIKK_DEBUG_MODE	1
 
 #define VEIKK_VENDOR_ID		0x2FEB
 #define VEIKK_DRIVER_VERSION	"3.0.0"
@@ -26,11 +26,18 @@
 #define VEIKK_BTN_STYLUS	0x2
 #define VEIKK_BTN_STYLUS2	0x4
 
-// pen report structure
+// TODO: turn this into a sysfs parameter; macro used just for simplicity
+#define VEIKK_DFL_BTNS		0
+
+// raw report structures
 struct veikk_pen_report {
 	u8 report_id;
 	u8 buttons;
 	u16 x, y, pressure;
+};
+struct veikk_keyboard_report {
+	u8 report_id, ctrl_modifier;
+	u8 btns[6];
 };
 
 // types of veikk hid_devices; see quirks for more details because keyboard
@@ -93,13 +100,46 @@ void veikk_report(struct hid_device *hid_dev, struct hid_report *report)
 }
 #endif	// VEIKK_DEBUG_MODE
 
+// possible VEIKK buttons; these indices will be "pseudo-usages" used to remap
+// to specific keys, depending on the device
+//  0,  1,  2,  3,  4,        5,  6,  7,  8,  9, 10, 11, 12
+// 3e, 0c, 2c, 19, 06, 19+Ctrl*, 1d, 16, 28, 2d, 2e, 2f, e0
+// note that the usage 19 (KEY_V) can be used with or without a Ctrl modifier
+// on the A50, but this is resolved in the handler
+static const s8 usage_pseudousage_map[64] = {
+//	  0   1   2   3   4   5   6   7   8   9   a   b   c   d   e   f
+	 -1, -1, -1, -1, -1, -1,  4, -1, -1, -1, -1, -1,  1, -1, -1, -1, // 0
+	 -1, -1, -1, -1, -1, -1,  7, -1, -1,  3, -1, -1, -1,  6, -1, -1, // 1
+	 -1, -1, -1, -1, -1, -1, -1, -1,  8, -1, -1, -1,  2,  9, 10, 11, // 2
+	 12, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  0, -1, // 3
+};
+
+// default map (control modifier will be placed separately)
+// TODO: declare this value 13 in a const somewhere
+static int dfl_pseudousage_key_map[13] = {
+	KEY_F5, KEY_I, KEY_SPACE, KEY_V, KEY_C, KEY_V, KEY_Z, KEY_S,
+	KEY_ENTER, KEY_MINUS, KEY_EQUAL, KEY_LEFTBRACE, KEY_RIGHTBRACE
+};
+
+// for testing; this is the A50 map
+static int a50_pseudousage_key_map[13] = {
+	BTN_0, BTN_1, BTN_2, BTN_3, BTN_4, BTN_5, BTN_6, BTN_7,
+	0, KEY_DOWN, KEY_UP, KEY_LEFT, KEY_RIGHT
+};
+
 static int veikk_raw_event(struct hid_device *hid_dev,
 		struct hid_report *report, u8 *data, int size)
 {
 	struct veikk_device *veikk_dev = hid_get_drvdata(hid_dev);
 	struct veikk_pen_report *pen_report;
+	struct veikk_keyboard_report *keyboard_report;
 	struct input_dev *input;
 
+	u8 pseudousages[13] = { 0 }, i;
+	s8 pseudousage;
+	int *pseudousage_key_map;
+
+	// TODO: move these into their own functions, nested too deep
 	switch (report->id) {
 	case VEIKK_PEN_REPORT:
 	case VEIKK_STYLUS_REPORT:
@@ -121,18 +161,48 @@ static int veikk_raw_event(struct hid_device *hid_dev,
 		input_report_key(input, BTN_STYLUS2,
 				pen_report->buttons & VEIKK_BTN_STYLUS2);
 		break;
-
 	case VEIKK_KEYBOARD_REPORT:
-		hid_info(hid_dev, "keyboard report not implemented yet. %d", size);
-
 		#ifdef VEIKK_DEBUG_MODE
 		hid_info(hid_dev, "%2x %2x %2x %2x %2x %2x %2x %2x ",
 			data[0], data[1], data[2], data[3],
 			data[4], data[5], data[6], data[7]);
 		#endif	// VEIKK_DEBUG_MODE
 
-		return 0;
+		if (size != sizeof(struct veikk_keyboard_report))
+			return -EINVAL;
 
+		keyboard_report = (struct veikk_keyboard_report *) data;
+		input = veikk_dev->keyboard_input;
+
+		// fill pseudo-usages map; this is independent of device
+		for (i = 0; i < 6 && keyboard_report->btns[i]; ++i) {
+			if ((pseudousage = usage_pseudousage_map[keyboard_report->btns[i]]) == -1)
+				return -EINVAL;
+			++pseudousages[pseudousage];
+		}
+
+		// if both Ctrl+V and V are pressed (A50)
+		if (pseudousages[3] && keyboard_report->ctrl_modifier) {
+			--pseudousages[3];
+			++pseudousages[5];
+		}
+
+		// if default mapping; also report ctrl
+		if (!VEIKK_DFL_BTNS) {
+			input_report_key(input, KEY_LEFTCTRL,
+					keyboard_report->ctrl_modifier);
+			pseudousage_key_map = dfl_pseudousage_key_map;
+		} else {
+			// mapping = veikk->model->button_map;
+			pseudousage_key_map = a50_pseudousage_key_map;
+		}
+
+		for (i = 0; i < 13; i++) {
+			hid_info(hid_dev, "KEY %d VALUE %d", pseudousage_key_map[i], pseudousages[i]);
+			input_report_key(input, pseudousage_key_map[i], pseudousages[i]);
+		}
+
+		break;
 	default:
 		hid_info(hid_dev, "unknown report with id %d", report->id);
 		return 0;
@@ -159,7 +229,7 @@ static enum veikk_hid_type veikk_identify_device(struct hid_device *hid_dev)
 	hid_info(hid_dev, "DEV RDESC (len %d)", rsize);
 	for (i = 0; i < rsize; i++)
 		printk(KERN_CONT "%x ", rdesc[i]);
-	printk("");
+	printk(KERN_INFO "");
 	#endif	// VEIKK_DEBUG_MODE
 
 	// just to be safe
@@ -201,6 +271,7 @@ static int veikk_register_input(struct hid_device *hid_dev)
 	struct veikk_device *veikk_dev = hid_get_drvdata(hid_dev);
 	struct input_dev *input;
 	char *input_name;
+	int i;
 
 	// setup appropriate input capabilities
 	if (veikk_dev->type == VEIKK_PEN) {
@@ -251,6 +322,7 @@ static int veikk_register_input(struct hid_device *hid_dev)
 
 		__set_bit(MSC_SCAN, input->mscbit);
 
+		// possible keys sent out by button mappings
 		__set_bit(BTN_0, input->keybit);
 		__set_bit(BTN_1, input->keybit);
 		__set_bit(BTN_2, input->keybit);
@@ -259,6 +331,15 @@ static int veikk_register_input(struct hid_device *hid_dev)
 		__set_bit(BTN_5, input->keybit);
 		__set_bit(BTN_6, input->keybit);
 		__set_bit(BTN_7, input->keybit);
+		__set_bit(KEY_DOWN, input->keybit);
+		__set_bit(KEY_UP, input->keybit);
+		__set_bit(KEY_LEFT, input->keybit);
+		__set_bit(KEY_RIGHT, input->keybit);
+
+		// possible keys sent out by default map
+		__set_bit(KEY_LEFTCTRL, input->keybit);
+		for (i = 0; i < 13; ++i)
+			__set_bit(dfl_pseudousage_key_map[i], input->keybit);
 
 		input_enable_softrepeat(input, 100, 33);
 
