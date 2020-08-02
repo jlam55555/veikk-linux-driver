@@ -4,6 +4,8 @@
 // See GitHub for descriptions of VEIKK device quirks, setup information, and
 // 		detailed testing environments/data
 
+#include <linux/kernel.h>
+
 #include <linux/hid.h>
 #include <linux/module.h>
 #include <linux/types.h>
@@ -138,6 +140,8 @@ static int veikk_raw_event(struct hid_device *hid_dev,
 	u8 pseudousages[13] = { 0 }, i;
 	s8 pseudousage;
 	int *pseudousage_key_map;
+
+	//dump_stack();
 
 	// TODO: move these into their own functions, nested too deep
 	switch (report->id) {
@@ -352,7 +356,7 @@ static int veikk_register_input(struct hid_device *hid_dev)
 		// TODO: would like to get rid of these, but it seems they
 		// need to be here to work, may be related to report desc
 		// TODO: list any other devices that have this quirk
-		__set_bit(BTN_TOUCH, input->keybit);
+		/*__set_bit(BTN_TOUCH, input->keybit);
 		__set_bit(BTN_STYLUS, input->keybit);
 		__set_bit(BTN_STYLUS2, input->keybit);
 
@@ -363,7 +367,7 @@ static int veikk_register_input(struct hid_device *hid_dev)
 		input_set_abs_params(input, ABS_Y, 0, 1, 0, 0);
 		input_set_abs_params(input, ABS_PRESSURE, 0, 1, 0, 0);
 		input_abs_set_res(input, ABS_X, 1);
-		input_abs_set_res(input, ABS_Y, 1);
+		input_abs_set_res(input, ABS_Y, 1);*/
 	} else {
 		// if device type == VEIKK_KEYBOARD and no buttons, may
 		// be needed in some rare possible edge case, given the
