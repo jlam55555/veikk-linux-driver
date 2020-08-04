@@ -127,6 +127,47 @@ static const int dfl_pusage_key_map[VEIKK_BTN_COUNT] = {
 // use this map as a symbol for the device having no buttons (e.g., for S640)
 static const int veikk_no_btns[VEIKK_BTN_COUNT];
 
+// identify veikk type by report parsing; pen input, keyboard input, or
+// proprietary; the distinction is not so clean, so this is not so clean;
+// returns -EINVAL if type not recognized; can be thought of as a very
+// simple custom hid_parse becauase of the quirks
+static enum veikk_hid_type veikk_identify_device(struct hid_device *hid_dev)
+{
+	// dev_rdesc and dev_rsize are the device report descriptor and its
+	// length, respectively
+	u8 *rdesc = hid_dev->dev_rdesc;
+	unsigned int rsize = hid_dev->dev_rsize, i;
+
+	// TODO: remove; print out device report descriptor
+	#ifdef VEIKK_DEBUG_MODE
+	hid_info(hid_dev, "DEV RDESC (len %d)", rsize);
+	for (i = 0; i < rsize; i++)
+		printk(KERN_CONT "%x ", rdesc[i]);
+	printk(KERN_INFO "");
+	#endif	// VEIKK_DEBUG_MODE
+
+	// just to be safe
+	if (rsize < 3)
+		return VEIKK_UNKNOWN;
+	
+	// check if proprietary; always begins with the byte sequence
+	// 0x06 0x0A 0xFF
+	if (rdesc[0] == 0x06 && rdesc[1] == 0x0A && rdesc[2] == 0xFF)
+		return VEIKK_PROPRIETARY;
+
+	// check if keyboard; always has the byte sequence 0x05 0x01 0x09 0x06
+	// TODO: possibly misidentifications on untested devices, am not sure
+	for (i = 0; i < rsize-4; i++)
+		if (rdesc[i] == 0x05 && rdesc[i+1] == 0x01
+				&& rdesc[i+2] == 0x09 && rdesc[i+3] == 0x06)
+			return VEIKK_KEYBOARD;
+
+	// default case is digitizer
+	// TODO: put some stricter check on this to protect against
+	// possible misidentifications?
+	return VEIKK_PEN;
+}
+
 static int veikk_pen_event(struct veikk_pen_report *evt,
 		struct input_dev *input)
 {
@@ -147,12 +188,6 @@ static int veikk_keyboard_event(struct veikk_keyboard_report *evt,
 	u8 pusages[VEIKK_BTN_COUNT] = { 0 }, i;
 	s8 pusage;
 	const int *pusage_key_map;
-
-	#ifdef VEIKK_DEBUG_MODE
-	hid_info(hid_dev, "%2x %2x %2x %2x %2x %2x %2x %2x ",
-		data[0], data[1], data[2], data[3],
-		data[4], data[5], data[6], data[7]);
-	#endif	// VEIKK_DEBUG_MODE
 
 	// fill pseudo-usages map; this is independent of device
 	for (i = 0; i < 6 && evt->btns[i]; ++i) {
@@ -197,6 +232,7 @@ static int veikk_raw_event(struct hid_device *hid_dev,
 	case VEIKK_STYLUS_REPORT:
 		if (size != sizeof(struct veikk_pen_report))
 			return -EINVAL;
+
 		input = veikk_dev->pen_input;
 		if ((err = veikk_pen_event((struct veikk_pen_report *) data,
 					input)))
@@ -205,6 +241,13 @@ static int veikk_raw_event(struct hid_device *hid_dev,
 	case VEIKK_KEYBOARD_REPORT:
 		if (size != sizeof(struct veikk_keyboard_report))
 			return -EINVAL;
+
+		#ifdef VEIKK_DEBUG_MODE
+		hid_info(hid_dev, "%2x %2x %2x %2x %2x %2x %2x %2x ",
+			data[0], data[1], data[2], data[3],
+			data[4], data[5], data[6], data[7]);
+		#endif	// VEIKK_DEBUG_MODE
+
 		input = veikk_dev->keyboard_input;
 		if ((err = veikk_keyboard_event((struct veikk_keyboard_report *)
 				data, input, veikk_dev->model->btn_map)))
@@ -220,47 +263,6 @@ static int veikk_raw_event(struct hid_device *hid_dev,
 	return 1;
 }
 
-// identify veikk type by report parsing; pen input, keyboard input, or
-// proprietary; the distinction is not so clean, so this is not so clean;
-// returns -EINVAL if type not recognized; can be thought of as a very
-// simple custom hid_parse becauase of the quirks
-static enum veikk_hid_type veikk_identify_device(struct hid_device *hid_dev)
-{
-	// dev_rdesc and dev_rsize are the device report descriptor and its
-	// length, respectively
-	u8 *rdesc = hid_dev->dev_rdesc;
-	unsigned int rsize = hid_dev->dev_rsize, i;
-
-	// TODO: remove; print out device report descriptor
-	#ifdef VEIKK_DEBUG_MODE
-	hid_info(hid_dev, "DEV RDESC (len %d)", rsize);
-	for (i = 0; i < rsize; i++)
-		printk(KERN_CONT "%x ", rdesc[i]);
-	printk(KERN_INFO "");
-	#endif	// VEIKK_DEBUG_MODE
-
-	// just to be safe
-	if (rsize < 3)
-		return VEIKK_UNKNOWN;
-	
-	// check if proprietary; always begins with the byte sequence
-	// 0x06 0x0A 0xFF
-	if (rdesc[0] == 0x06 && rdesc[1] == 0x0A && rdesc[2] == 0xFF)
-		return VEIKK_PROPRIETARY;
-
-	// check if keyboard; always has the byte sequence 0x05 0x01 0x09 0x06
-	// TODO: possibly misidentifications on untested devices, am not sure
-	for (i = 0; i < rsize-4; i++)
-		if (rdesc[i] == 0x05 && rdesc[i+1] == 0x01
-				&& rdesc[i+2] == 0x09 && rdesc[i+3] == 0x06)
-			return VEIKK_KEYBOARD;
-
-	// default case is digitizer
-	// TODO: put some stricter check on this to protect against
-	// possible misidentifications?
-	return VEIKK_PEN;
-}
-
 // called by struct input_dev instances, not called directly
 static int veikk_input_open(struct input_dev *dev)
 {
@@ -271,115 +273,91 @@ static void veikk_input_close(struct input_dev *dev)
 	hid_hw_close((struct hid_device *) input_get_drvdata(dev));
 }
 
+static int veikk_register_pen_input(struct input_dev *input,
+		const struct veikk_model *model)
+{
+	char *input_name;
+
+	// input name = model name + " Pen"
+	if (!(input_name = devm_kzalloc(&input->dev, strlen(model->name)+5,
+			GFP_KERNEL)))
+		return -ENOMEM;
+	sprintf(input_name, "%s Pen", model->name);
+	input->name = input_name;
+
+	__set_bit(INPUT_PROP_POINTER, input->propbit);
+
+	__set_bit(EV_KEY, input->evbit);
+	__set_bit(EV_ABS, input->evbit);
+
+	__set_bit(BTN_TOUCH, input->keybit);
+	__set_bit(BTN_STYLUS, input->keybit);
+	__set_bit(BTN_STYLUS2, input->keybit);
+
+	// TODO: not sure what resolution, fuzz values should be;
+	// these ones seem to work fine for now
+	input_set_abs_params(input, ABS_X, 0, model->x_max, 0, 0);
+	input_set_abs_params(input, ABS_Y, 0, model->y_max, 0, 0);
+	input_set_abs_params(input, ABS_PRESSURE, 0, model->pressure_max, 0, 0);
+	input_abs_set_res(input, ABS_X, 100);
+	input_abs_set_res(input, ABS_Y, 100);
+	return 0;
+}
+
+static int veikk_register_keyboard_input(struct input_dev *input,
+		const struct veikk_model *model)
+{
+	char *input_name;
+	int i;
+
+	// input name = model name + " Keyboard"
+	if (!(input_name = devm_kzalloc(&input->dev, strlen(model->name)+9,
+			GFP_KERNEL)))
+		return -ENOMEM;
+	sprintf(input_name, "%s Keyboard", model->name);
+	input->name = input_name;
+
+	__set_bit(INPUT_PROP_BUTTONPAD, input->propbit);
+
+	__set_bit(EV_KEY, input->evbit);
+	__set_bit(EV_MSC, input->evbit);
+	__set_bit(EV_REP, input->evbit);
+	__set_bit(MSC_SCAN, input->mscbit);
+
+	// possible keys sent out by regular map
+	for (i = 0; i < VEIKK_BTN_COUNT; ++i)
+		__set_bit(model->btn_map[i], input->keybit);
+
+	// possible keys sent out by default map
+	__set_bit(KEY_LEFTCTRL, input->keybit);
+	for (i = 0; i < VEIKK_BTN_COUNT; ++i)
+		__set_bit(dfl_pusage_key_map[i], input->keybit);
+
+	input_enable_softrepeat(input, 100, 33);
+	return 0;
+}
+
 // register input for a struct hid_device. This depends on the device type.
 // returns -errno on failure
 static int veikk_register_input(struct hid_device *hid_dev)
 {
 	struct veikk_device *veikk_dev = hid_get_drvdata(hid_dev);
+	const struct veikk_model *model = veikk_dev->model;
 	struct input_dev *input;
-	char *input_name;
-	int i;
+	int err;
 
 	// setup appropriate input capabilities
 	if (veikk_dev->type == VEIKK_PEN) {
 		input = veikk_dev->pen_input;
-
-		// input name = model name + " Pen"
-		if (!(input_name = devm_kzalloc(&hid_dev->dev,
-				strlen(veikk_dev->model->name)+5, GFP_KERNEL)))
-			return -ENOMEM;
-		sprintf(input_name, "%s Pen", veikk_dev->model->name);
-		input->name = input_name;
-
-		__set_bit(INPUT_PROP_POINTER, input->propbit);
-
-		__set_bit(EV_KEY, input->evbit);
-		__set_bit(EV_ABS, input->evbit);
-
-		__set_bit(BTN_TOUCH, input->keybit);
-		__set_bit(BTN_STYLUS, input->keybit);
-		__set_bit(BTN_STYLUS2, input->keybit);
-
-		// TODO: not sure what resolution, fuzz values should be;
-		// these ones seem to work fine for now
-		input_set_abs_params(input, ABS_X, 0,
-				veikk_dev->model->x_max, 0, 0);
-		input_set_abs_params(input, ABS_Y, 0,
-				veikk_dev->model->y_max, 0, 0);
-		input_set_abs_params(input, ABS_PRESSURE, 0,
-				veikk_dev->model->pressure_max, 0, 0);
-		input_abs_set_res(input, ABS_X, 100);
-		input_abs_set_res(input, ABS_Y, 100);
+		if ((err = veikk_register_pen_input(input, model)))
+			return err;
 	} else if (veikk_dev->model->btn_map != veikk_no_btns
 			&& veikk_dev->type == VEIKK_KEYBOARD) {
 		input = veikk_dev->keyboard_input;
-
-		// input name = model name + " Keyboard"
-		if (!(input_name = devm_kzalloc(&hid_dev->dev,
-				strlen(veikk_dev->model->name)+9, GFP_KERNEL)))
-			return -ENOMEM;
-		sprintf(input_name, "%s Keyboard", veikk_dev->model->name);
-		input->name = input_name;
-
-		__set_bit(INPUT_PROP_BUTTONPAD, input->propbit);
-
-		__set_bit(EV_KEY, input->evbit);
-		__set_bit(EV_MSC, input->evbit);
-		__set_bit(EV_REP, input->evbit);
-
-		__set_bit(MSC_SCAN, input->mscbit);
-
-		// possible keys sent out by button mappings
-		__set_bit(BTN_0, input->keybit);
-		__set_bit(BTN_1, input->keybit);
-		__set_bit(BTN_2, input->keybit);
-		__set_bit(BTN_3, input->keybit);
-		__set_bit(BTN_4, input->keybit);
-		__set_bit(BTN_5, input->keybit);
-		__set_bit(BTN_6, input->keybit);
-		__set_bit(BTN_7, input->keybit);
-		__set_bit(KEY_DOWN, input->keybit);
-		__set_bit(KEY_UP, input->keybit);
-		__set_bit(KEY_LEFT, input->keybit);
-		__set_bit(KEY_RIGHT, input->keybit);
-		// pressing the button in the center of the wheel on the VK1560
-		__set_bit(BTN_WHEEL, input->keybit);
-
-		// possible keys sent out by default map
-		__set_bit(KEY_LEFTCTRL, input->keybit);
-		for (i = 0; i < VEIKK_BTN_COUNT; ++i)
-			__set_bit(dfl_pusage_key_map[i], input->keybit);
-
-		input_enable_softrepeat(input, 100, 33);
-
-		// TODO: remove; the below code is for kernels < 4.18,
-		// which will not be supported
-		// NASTY WORKAROUND FOR VEIKK A50/VK1560 (as tested, may be
-		// others) device reports both keyboard and pen events from the
-		// same struct hid_device, need this to trigger the correct
-		// events; this makes the keyboard look like a mouse/pointer
-		// to the X server, even though it doesn't emit any pointer
-		// events
-		// TODO: would like to get rid of these, but it seems they
-		// need to be here to work, may be related to report desc
-		// TODO: list any other devices that have this quirk
-		/*__set_bit(BTN_TOUCH, input->keybit);
-		__set_bit(BTN_STYLUS, input->keybit);
-		__set_bit(BTN_STYLUS2, input->keybit);
-
-		// set abs params so it's recognized by evdev, but fill with
-		// bogus values to indicate that these events are invalid
-		__set_bit(EV_ABS, input->evbit);
-		input_set_abs_params(input, ABS_X, 0, 1, 0, 0);
-		input_set_abs_params(input, ABS_Y, 0, 1, 0, 0);
-		input_set_abs_params(input, ABS_PRESSURE, 0, 1, 0, 0);
-		input_abs_set_res(input, ABS_X, 1);
-		input_abs_set_res(input, ABS_Y, 1);*/
+		if ((err = veikk_register_keyboard_input(input, model)))
+			return err;
 	} else {
-		// if device type == VEIKK_KEYBOARD and no buttons, may
-		// be needed in some rare possible edge case, given the
-		// known existing quirks; in this case, just return
-		// successfully without registering an input device
+		// for S640, since it has no keyboard input
 		return 0;
 	}
 
