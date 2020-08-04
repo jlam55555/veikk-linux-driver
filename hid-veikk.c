@@ -28,6 +28,8 @@
 #define VEIKK_BTN_STYLUS	0x2
 #define VEIKK_BTN_STYLUS2	0x4
 
+#define VEIKK_BTN_COUNT		13
+
 // TODO: turn this into a sysfs parameter; macro used just for simplicity
 #define VEIKK_DFL_BTNS		0
 
@@ -60,8 +62,8 @@ struct veikk_model {
 	// drawing pad physical characteristics
 	const int x_max, y_max, pressure_max;
 
-	// keyboard physical characteristics
-	const int button_count;
+	// button mapping; should be an array of length VEIKK_BTN_COUNT
+	const int *btn_map;
 };
 
 // veikk hid device descriptor
@@ -117,17 +119,13 @@ static const s8 usage_pseudousage_map[64] = {
 };
 
 // default map (control modifier will be placed separately)
-// TODO: declare this value 13 in a const somewhere
-static int dfl_pseudousage_key_map[13] = {
+static const int dfl_pseudousage_key_map[VEIKK_BTN_COUNT] = {
 	KEY_F5, KEY_I, KEY_SPACE, KEY_V, KEY_C, KEY_V, KEY_Z, KEY_S,
 	KEY_ENTER, KEY_MINUS, KEY_EQUAL, KEY_LEFTBRACE, KEY_RIGHTBRACE
 };
 
-// for testing; this is the A50 map
-static int a50_pseudousage_key_map[13] = {
-	BTN_0, BTN_1, BTN_2, BTN_3, BTN_4, BTN_5, BTN_6, BTN_7,
-	0, KEY_DOWN, KEY_UP, KEY_LEFT, KEY_RIGHT
-};
+// use this map as a symbol for the device having no buttons (e.g., for S640)
+static const int veikk_no_btns[VEIKK_BTN_COUNT];
 
 static int veikk_raw_event(struct hid_device *hid_dev,
 		struct hid_report *report, u8 *data, int size)
@@ -137,9 +135,9 @@ static int veikk_raw_event(struct hid_device *hid_dev,
 	struct veikk_keyboard_report *keyboard_report;
 	struct input_dev *input;
 
-	u8 pseudousages[13] = { 0 }, i;
+	u8 pseudousages[VEIKK_BTN_COUNT] = { 0 }, i;
 	s8 pseudousage;
-	int *pseudousage_key_map;
+	const int *pseudousage_key_map;
 
 	//dump_stack();
 
@@ -192,16 +190,16 @@ static int veikk_raw_event(struct hid_device *hid_dev,
 		}
 
 		// if default mapping; also report ctrl
-		if (!VEIKK_DFL_BTNS) {
+		if (VEIKK_DFL_BTNS ||
+				veikk_dev->model->btn_map == veikk_no_btns) {
 			input_report_key(input, KEY_LEFTCTRL,
 					keyboard_report->ctrl_modifier);
 			pseudousage_key_map = dfl_pseudousage_key_map;
 		} else {
-			// mapping = veikk->model->button_map;
-			pseudousage_key_map = a50_pseudousage_key_map;
+			pseudousage_key_map = veikk_dev->model->btn_map;
 		}
 
-		for (i = 0; i < 13; i++) {
+		for (i = 0; i < VEIKK_BTN_COUNT; i++) {
 			hid_info(hid_dev, "KEY %d VALUE %d", pseudousage_key_map[i], pseudousages[i]);
 			input_report_key(input, pseudousage_key_map[i], pseudousages[i]);
 		}
@@ -307,7 +305,7 @@ static int veikk_register_input(struct hid_device *hid_dev)
 				veikk_dev->model->pressure_max, 0, 0);
 		input_abs_set_res(input, ABS_X, 100);
 		input_abs_set_res(input, ABS_Y, 100);
-	} else if (veikk_dev->model->button_count
+	} else if (veikk_dev->model->btn_map != veikk_no_btns
 			&& veikk_dev->type == VEIKK_KEYBOARD) {
 		input = veikk_dev->keyboard_input;
 
@@ -339,10 +337,12 @@ static int veikk_register_input(struct hid_device *hid_dev)
 		__set_bit(KEY_UP, input->keybit);
 		__set_bit(KEY_LEFT, input->keybit);
 		__set_bit(KEY_RIGHT, input->keybit);
+		// pressing the button in the center of the wheel on the VK1560
+		__set_bit(BTN_WHEEL, input->keybit);
 
 		// possible keys sent out by default map
 		__set_bit(KEY_LEFTCTRL, input->keybit);
-		for (i = 0; i < 13; ++i)
+		for (i = 0; i < VEIKK_BTN_COUNT; ++i)
 			__set_bit(dfl_pseudousage_key_map[i], input->keybit);
 
 		input_enable_softrepeat(input, 100, 33);
@@ -517,22 +517,44 @@ static void veikk_remove(struct hid_device *hid_dev) {
 	#endif	// VEIKK_DEBUG_MODE
 }
 
-// list of veikk models
+// list of veikk models; see usage_pseudousage_map for more details on the
+// button_map field
+// TODO: need to get button map for some devices
 static struct veikk_model veikk_model_0x0001 = {
 	.name = "VEIKK S640", .prod_id = 0x0001,
 	.x_max = 32768, .y_max = 32768, .pressure_max = 8192,
-	.button_count = 0
+	.btn_map = veikk_no_btns
+};
+static struct veikk_model veikk_model_0x0002 = {
+	.name = "VEIKK A30", .prod_id = 0x0002,
+	.x_max = 32768, .y_max = 32768, .pressure_max = 8192,
+	.btn_map = veikk_no_btns
 };
 static struct veikk_model veikk_model_0x0003 = {
 	.name = "VEIKK A50", .prod_id = 0x0003,
 	.x_max = 32768, .y_max = 32768, .pressure_max = 8192,
-	.button_count = 1
+	.btn_map = (int[]) {
+		BTN_0, BTN_1, BTN_2, BTN_3, BTN_4, BTN_5, BTN_6, BTN_7,
+		0, KEY_DOWN, KEY_UP, KEY_LEFT, KEY_RIGHT
+	}
+};
+static struct veikk_model veikk_model_0x0004 = {
+	.name = "VEIKK A15", .prod_id = 0x0004,
+	.x_max = 32768, .y_max = 32768, .pressure_max = 8192,
+	.btn_map = veikk_no_btns
+};
+static struct veikk_model veikk_model_0x0006 = {
+	.name = "VEIKK A15 Pro", .prod_id = 0x0006,
+	.x_max = 32768, .y_max = 32768, .pressure_max = 8192,
+	.btn_map = veikk_no_btns
 };
 static struct veikk_model veikk_model_0x1001 = {
 	.name = "VEIKK VK1560", .prod_id = 0x1001,
-	// FIXME: not correct dims
-	.x_max = 32768, .y_max = 32768, .pressure_max = 8192,
-	.button_count = 1
+	.x_max = 27536, .y_max = 15488, .pressure_max = 8192,
+	.btn_map = (int[]) {
+		BTN_0, BTN_1, BTN_2, 0, BTN_3, BTN_4, BTN_5, BTN_6,
+		BTN_WHEEL, KEY_DOWN, KEY_UP, KEY_LEFT, KEY_RIGHT
+	}
 };
 // TODO: add more tablets
 
@@ -541,9 +563,12 @@ static struct veikk_model veikk_model_0x1001 = {
 	HID_USB_DEVICE(VEIKK_VENDOR_ID, prod),\
 	.driver_data = (u64) &veikk_model_##prod
 static const struct hid_device_id veikk_model_ids[] = {
-	{ VEIKK_MODEL(0x0001) },
-	{ VEIKK_MODEL(0x0003) },
-	{ VEIKK_MODEL(0x1001) },
+	{ VEIKK_MODEL(0x0001) },	// S640
+	{ VEIKK_MODEL(0x0002) },	// A30
+	{ VEIKK_MODEL(0x0003) },	// A50
+	{ VEIKK_MODEL(0x0004) },	// A15
+	{ VEIKK_MODEL(0x0006) },	// A15 Pro
+	{ VEIKK_MODEL(0x1001) },	// VK1560
 	{ }
 };
 MODULE_DEVICE_TABLE(hid, veikk_model_ids);
