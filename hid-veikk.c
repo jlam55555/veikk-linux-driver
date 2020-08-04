@@ -1,10 +1,10 @@
-// Linux driver for VEIKK digitizers, v3.0.0
-// S640, A30, A50, A15, A15 Pro, VK1560 tested on GIMP, Krita, kernels 4.4+
-// GitHub: https://www.github.com/jlam55555/veikk-linux-driver
-// See GitHub for descriptions of VEIKK device quirks, setup information, and
-// 		detailed testing environments/data
-
-#include <linux/kernel.h>
+/*
+ * Linux driver for VEIKK digitizers, v3.0.0
+ * S640, A30, A50, A15, A15 Pro, VK1560 tested on GIMP, Krita, kernels 4.18+
+ * GitHub: https://www.github.com/jlam55555/veikk-linux-driver
+ * See GitHub for descriptions of VEIKK device quirks, setup information, and
+ * 		detailed testing environments/data
+ */
 
 #include <linux/hid.h>
 #include <linux/module.h>
@@ -104,12 +104,14 @@ void veikk_report(struct hid_device *hid_dev, struct hid_report *report)
 }
 #endif	// VEIKK_DEBUG_MODE
 
-// possible VEIKK buttons; these indices will be "pseudo-usages" ("pusage"s)
-// used to remap to specific keys, depending on the device
-//  0,  1,  2,  3,  4,        5,  6,  7,  8,  9, 10, 11, 12
-// 3e, 0c, 2c, 19, 06, 19+Ctrl*, 1d, 16, 28, 2d, 2e, 2f, e0
-// note that the usage 19 (KEY_V) can be used with or without a Ctrl modifier
-// on the A50, but this is resolved in the handler
+/*
+ * possible VEIKK buttons; these indices will be "pseudo-usages" ("pusage"s)
+ * used to remap to specific keys, depending on the device
+ *  0,  1,  2,  3,  4,        5,  6,  7,  8,  9, 10, 11, 12
+ * 3e, 0c, 2c, 19, 06, 19+Ctrl*, 1d, 16, 28, 2d, 2e, 2f, e0
+ * note that the usage 19 (KEY_V) can be used with or without a Ctrl modifier
+ * on the A50, but this is resolved in the handler
+ */
 static const s8 usage_pusage_map[64] = {
 //	  0   1   2   3   4   5   6   7   8   9   a   b   c   d   e   f
 	 -1, -1, -1, -1, -1, -1,  4, -1, -1, -1, -1, -1,  1, -1, -1, -1, // 0
@@ -127,10 +129,12 @@ static const int dfl_pusage_key_map[VEIKK_BTN_COUNT] = {
 // use this map as a symbol for the device having no buttons (e.g., for S640)
 static const int veikk_no_btns[VEIKK_BTN_COUNT];
 
-// identify veikk type by report parsing; pen input, keyboard input, or
-// proprietary; the distinction is not so clean, so this is not so clean;
-// returns -EINVAL if type not recognized; can be thought of as a very
-// simple custom hid_parse becauase of the quirks
+/*
+ * identify veikk type by report parsing; pen input, keyboard input, or
+ * proprietary; the distinction is not so clean, so this is not so clean;
+ * returns -EINVAL if type not recognized; can be thought of as a very
+ * simple custom hid_parse becauase of the quirks
+ */
 static enum veikk_hid_type veikk_identify_device(struct hid_device *hid_dev)
 {
 	// dev_rdesc and dev_rsize are the device report descriptor and its
@@ -138,8 +142,8 @@ static enum veikk_hid_type veikk_identify_device(struct hid_device *hid_dev)
 	u8 *rdesc = hid_dev->dev_rdesc;
 	unsigned int rsize = hid_dev->dev_rsize, i;
 
-	// TODO: remove; print out device report descriptor
 	#ifdef VEIKK_DEBUG_MODE
+	// print out device report descriptor
 	hid_info(hid_dev, "DEV RDESC (len %d)", rsize);
 	for (i = 0; i < rsize; i++)
 		printk(KERN_CONT "%x ", rdesc[i]);
@@ -212,8 +216,8 @@ static int veikk_keyboard_event(struct veikk_keyboard_report *evt,
 
 	for (i = 0; i < VEIKK_BTN_COUNT; i++) {
 		#ifdef VEIKK_DEBUG_MODE
-			hid_info(hid_dev, "KEY %d VALUE %d", pusage_key_map[i],
-					pusages[i]);
+		hid_info(hid_dev, "KEY %d VALUE %d", pusage_key_map[i],
+				pusages[i]);
 		#endif	// VEIKK_DEBUG_MODE
 		input_report_key(input, pusage_key_map[i], pusages[i]);
 	}
@@ -337,8 +341,10 @@ static int veikk_register_keyboard_input(struct input_dev *input,
 	return 0;
 }
 
-// register input for a struct hid_device. This depends on the device type.
-// returns -errno on failure
+/*
+ * register input for a struct hid_device. This depends on the device type.
+ * returns -errno on failure
+ */
 static int veikk_register_input(struct hid_device *hid_dev)
 {
 	struct veikk_device *veikk_dev = hid_get_drvdata(hid_dev);
@@ -420,12 +426,7 @@ static int veikk_probe(struct hid_device *hid_dev,
 		return err;
 	}
 
-	if (!(devres_open_group(&hid_dev->dev, veikk_dev, GFP_KERNEL))) {
-		hid_info(hid_dev, "opening devres group");
-		return -ENOMEM;
-	}
-
-	// allocate input
+	// allocate struct input_devs
 	if (dev_type == VEIKK_PEN && !(veikk_dev->pen_input =
 			devm_input_allocate_device(&hid_dev->dev))) {
 		hid_info(hid_dev, "allocating digitizer input");
@@ -436,19 +437,25 @@ static int veikk_probe(struct hid_device *hid_dev,
 		return -ENOMEM;
 	}
 
-	devres_close_group(&hid_dev->dev, veikk_dev);
+	/*
+	 * veikk devices have multiple interfaces, which *may not correspond
+	 * to their functions* (e.g., one interface may have both keyboard and
+	 * pen functionalities, and the other none; or they may have one each);
+	 * thus, assign one struct input_dev to each. The one that is allocated
+	 * second will find the one that is allocated first and "share" their
+	 * struct input_devs so that they can emit the event on the correct
+	 * device, thus rectifying the interface mismatch
 
-	// all veikk devices have exactly one keyboard and one pen input
-	// (see definitions from description of quirks); these will be
-	// allocated on their respective devices, and the latter of the two
-	// will set the allocated devices on both struct_devices through
-	// this atomic linked list code
-	// TODO: remove from mutex if some other failure later in probe
+	 * TODO: remove from llist if some other failure later in probe
+	 */
 	mutex_lock(&veikk_devs_mutex);
-	// walk the list, see if this is the first or the second struct
-	// hid_device to be added to this list; if so, set the appropriate
-	// pointers to the other device's inputs and add it to the linked list;
-	// else just add to list
+	/*
+	 * walk the list, see if this is the first or the second struct
+	 * hid_device to be added to this list; if it is the second, (i.e.,
+	 * there is a struct hid_device with a matching usb_dev), set the
+	 * appropriate pointers to the other device's inputs and add it to the
+	 * linked list; else it is the first device, just add to list
+	 */
 	list_for_each(lh, &veikk_devs) {
 		veikk_dev_it = list_entry(lh, struct veikk_device, lh);
 
@@ -480,8 +487,9 @@ static int veikk_probe(struct hid_device *hid_dev,
 		return err;
 	}
 
-	// TODO: remove; for testing
+	#ifdef VEIKK_DEBUG_MODE
 	hid_info(hid_dev, "%s probed successfully.", veikk_dev->model->name);
+	#endif	// VEIKK_DEBUG_MODE
 	return 0;
 }
 
@@ -502,9 +510,12 @@ static void veikk_remove(struct hid_device *hid_dev) {
 	#endif	// VEIKK_DEBUG_MODE
 }
 
-// list of veikk models; see usage_pusage_map for more details on the
-// button_map field
-// TODO: need to get button map for some devices
+/*
+ * list of veikk models; see usage_pusage_map for more details on the
+ * button_map field
+ *
+ * TODO: need to get button map for some devices
+ */
 static struct veikk_model veikk_model_0x0001 = {
 	.name = "VEIKK S640", .prod_id = 0x0001,
 	.x_max = 32768, .y_max = 32768, .pressure_max = 8192,
@@ -566,8 +577,10 @@ static struct hid_driver veikk_driver = {
 	.remove = veikk_remove,
 	.raw_event = veikk_raw_event,
 
-	// the following are for debugging, .raw_event is the only one used
-	// for real event reporting
+	/*
+	 * the following are for debugging, .raw_event is the only one used
+	 * for real event reporting
+	 */
 	#ifdef VEIKK_DEBUG_MODE
 	.report = veikk_report,
 	.event = veikk_event,
