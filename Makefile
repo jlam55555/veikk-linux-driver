@@ -10,7 +10,10 @@ all:
 
 install:
 	$(MAKE) -C $(KDIR) M=$(CURDIR) modules_install
+	depmod
 	modprobe veikk
+	mkdir -p /etc/modules-load.d
+	echo "veikk" > /etc/modules-load.d/veikk.conf
 
 clean:
 	$(MAKE) -C $(KDIR) M=$(CURDIR) clean
