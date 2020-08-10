@@ -14,47 +14,51 @@
 // comment the following line to disable debugging output in kernel log (dmesg)
 //#define VEIKK_DEBUG_MODE	1
 
-#define VEIKK_VENDOR_ID		0x2FEB
-#define VEIKK_DRIVER_VERSION	"3.0.0"
-#define VEIKK_DRIVER_DESC	"VEIKK digitizer driver"
-#define VEIKK_DRIVER_AUTHOR	"Jonathan Lam <jlam55555@gmail.com>"
-#define VEIKK_DRIVER_LICENSE	"GPL"
+#define VEIKK_VENDOR_ID 0x2FEB
+#define VEIKK_DRIVER_VERSION "3.0.0"
+#define VEIKK_DRIVER_DESC "VEIKK digitizer driver"
+#define VEIKK_DRIVER_AUTHOR "Jonathan Lam <jlam55555@gmail.com>"
+#define VEIKK_DRIVER_LICENSE "GPL"
 
-#define VEIKK_PEN_REPORT	0x1
-#define VEIKK_STYLUS_REPORT	0x2
-#define VEIKK_KEYBOARD_REPORT	0x3
+#define VEIKK_PEN_REPORT 0x1
+#define VEIKK_STYLUS_REPORT 0x2
+#define VEIKK_KEYBOARD_REPORT 0x3
 
-#define VEIKK_BTN_TOUCH		0x1
-#define VEIKK_BTN_STYLUS	0x2
-#define VEIKK_BTN_STYLUS2	0x4
+#define VEIKK_BTN_TOUCH 0x1
+#define VEIKK_BTN_STYLUS 0x2
+#define VEIKK_BTN_STYLUS2 0x4
 
-#define VEIKK_BTN_COUNT		13
+#define VEIKK_BTN_COUNT 13
 
 // TODO: turn this into a sysfs parameter; macro used just for simplicity
-#define VEIKK_DFL_BTNS		0
+#define VEIKK_DFL_BTNS 0
 
 // raw report structures
-struct veikk_pen_report {
+struct veikk_pen_report
+{
 	u8 report_id;
 	u8 btns;
 	u16 x, y, pressure;
 };
-struct veikk_keyboard_report {
+struct veikk_keyboard_report
+{
 	u8 report_id, ctrl_modifier;
 	u8 btns[6];
 };
 
 // types of veikk hid_devices; see quirks for more details because keyboard
 // and digitizer inputs are not exact
-enum veikk_hid_type {
-	VEIKK_UNKNOWN = -EINVAL,	// erroroneous report format
-	VEIKK_PROPRIETARY = 0,		// this input to be ignored
-	VEIKK_KEYBOARD,			// keyboard input
-	VEIKK_PEN			// pen (drawing pad) input
+enum veikk_hid_type
+{
+	VEIKK_UNKNOWN = -EINVAL, // erroroneous report format
+	VEIKK_PROPRIETARY = 0,	 // this input to be ignored
+	VEIKK_KEYBOARD,			 // keyboard input
+	VEIKK_PEN				 // pen (drawing pad) input
 };
 
 // veikk model descriptor
-struct veikk_model {
+struct veikk_model
+{
 	// basic parameters
 	const char *name;
 	const int prod_id;
@@ -67,7 +71,8 @@ struct veikk_model {
 };
 
 // veikk hid device descriptor
-struct veikk_device {
+struct veikk_device
+{
 	// hardware details
 	struct usb_device *usb_dev;
 
@@ -93,7 +98,7 @@ DEFINE_MUTEX(veikk_devs_mutex);
 // veikk_event and veikk_report are only used for debugging
 #ifdef VEIKK_DEBUG_MODE
 static int veikk_event(struct hid_device *hdev, struct hid_field *field,
-		struct hid_usage *usage, __s32 value)
+					   struct hid_usage *usage, __s32 value)
 {
 	hid_info(hdev, "in veikk_event: usage %x value %d", usage->hid, value);
 	return 0;
@@ -102,7 +107,7 @@ void veikk_report(struct hid_device *hid_dev, struct hid_report *report)
 {
 	hid_info(hid_dev, "in veikk_report: report id %d", report->id);
 }
-#endif	// VEIKK_DEBUG_MODE
+#endif // VEIKK_DEBUG_MODE
 
 /*
  * possible VEIKK buttons; these indices will be "pseudo-usages" ("pusage"s)
@@ -113,18 +118,17 @@ void veikk_report(struct hid_device *hid_dev, struct hid_report *report)
  * on the A50, but this is resolved in the handler
  */
 static const s8 usage_pusage_map[64] = {
-//	  0   1   2   3   4   5   6   7   8   9   a   b   c   d   e   f
-	 -1, -1, -1, -1, -1, -1,  4, -1, -1, -1, -1, -1,  1, -1, -1, -1, // 0
-	 -1, -1, -1, -1, -1, -1,  7, -1, -1,  3, -1, -1, -1,  6, -1, -1, // 1
-	 -1, -1, -1, -1, -1, -1, -1, -1,  8, -1, -1, -1,  2,  9, 10, 11, // 2
-	 12, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  0, -1, // 3
+	//	  0   1   2   3   4   5   6   7   8   9   a   b   c   d   e   f
+	-1, -1, -1, -1, -1, -1, 4, -1, -1, -1, -1, -1, 1, -1, -1, -1,  // 0
+	-1, -1, -1, -1, -1, -1, 7, -1, -1, 3, -1, -1, -1, 6, -1, -1,   // 1
+	-1, -1, -1, -1, -1, -1, -1, -1, 8, -1, -1, -1, 2, 9, 10, 11,   // 2
+	12, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 0, -1, // 3
 };
 
 // default map (control modifier will be placed separately)
 static const int dfl_pusage_key_map[VEIKK_BTN_COUNT] = {
 	KEY_F5, KEY_I, KEY_SPACE, KEY_V, KEY_C, KEY_V, KEY_Z, KEY_S,
-	KEY_ENTER, KEY_MINUS, KEY_EQUAL, KEY_LEFTBRACE, KEY_RIGHTBRACE
-};
+	KEY_ENTER, KEY_MINUS, KEY_EQUAL, KEY_LEFTBRACE, KEY_RIGHTBRACE};
 
 // use this map as a symbol for the device having no buttons (e.g., for S640)
 static const int veikk_no_btns[VEIKK_BTN_COUNT];
@@ -142,18 +146,18 @@ static enum veikk_hid_type veikk_identify_device(struct hid_device *hid_dev)
 	u8 *rdesc = hid_dev->dev_rdesc;
 	unsigned int rsize = hid_dev->dev_rsize, i;
 
-	#ifdef VEIKK_DEBUG_MODE
+#ifdef VEIKK_DEBUG_MODE
 	// print out device report descriptor
 	hid_info(hid_dev, "DEV RDESC (len %d)", rsize);
 	for (i = 0; i < rsize; i++)
 		printk(KERN_CONT "%x ", rdesc[i]);
 	printk(KERN_INFO "");
-	#endif	// VEIKK_DEBUG_MODE
+#endif // VEIKK_DEBUG_MODE
 
 	// just to be safe
 	if (rsize < 3)
 		return VEIKK_UNKNOWN;
-	
+
 	// check if proprietary; always begins with the byte sequence
 	// 0x06 0x0A 0xFF
 	if (rdesc[0] == 0x06 && rdesc[1] == 0x0A && rdesc[2] == 0xFF)
@@ -161,9 +165,8 @@ static enum veikk_hid_type veikk_identify_device(struct hid_device *hid_dev)
 
 	// check if keyboard; always has the byte sequence 0x05 0x01 0x09 0x06
 	// TODO: possibly misidentifications on untested devices, am not sure
-	for (i = 0; i < rsize-4; i++)
-		if (rdesc[i] == 0x05 && rdesc[i+1] == 0x01
-				&& rdesc[i+2] == 0x09 && rdesc[i+3] == 0x06)
+	for (i = 0; i < rsize - 4; i++)
+		if (rdesc[i] == 0x05 && rdesc[i + 1] == 0x01 && rdesc[i + 2] == 0x09 && rdesc[i + 3] == 0x06)
 			return VEIKK_KEYBOARD;
 
 	// default case is digitizer
@@ -173,7 +176,7 @@ static enum veikk_hid_type veikk_identify_device(struct hid_device *hid_dev)
 }
 
 static int veikk_pen_event(struct veikk_pen_report *evt,
-		struct input_dev *input)
+						   struct input_dev *input)
 {
 	input_report_abs(input, ABS_X, evt->x);
 	input_report_abs(input, ABS_Y, evt->y);
@@ -187,74 +190,82 @@ static int veikk_pen_event(struct veikk_pen_report *evt,
 }
 
 static int veikk_keyboard_event(struct veikk_keyboard_report *evt,
-		struct input_dev *input, const int *btn_map)
+								struct input_dev *input, const int *btn_map)
 {
-	u8 pusages[VEIKK_BTN_COUNT] = { 0 }, i;
+	u8 pusages[VEIKK_BTN_COUNT] = {0}, i;
 	s8 pusage;
 	const int *pusage_key_map;
 
 	// fill pseudo-usages map; this is independent of device
-	for (i = 0; i < 6 && evt->btns[i]; ++i) {
+	for (i = 0; i < /*6*/ VEIKK_BTN_COUNT && evt->btns[i]; ++i)
+	{
 		if ((pusage = usage_pusage_map[evt->btns[i]]) == -1)
 			return -EINVAL;
 		++pusages[pusage];
 	}
 
 	// if both Ctrl+V and V are pressed (A50)
-	if (pusages[3] && evt->ctrl_modifier) {
+	if (pusages[3] && evt->ctrl_modifier)
+	{
 		--pusages[3];
 		++pusages[5];
 	}
 
 	// if default mapping; also report ctrl
-	if (VEIKK_DFL_BTNS || btn_map == veikk_no_btns) {
+	if (VEIKK_DFL_BTNS || btn_map == veikk_no_btns)
+	{
 		input_report_key(input, KEY_LEFTCTRL, evt->ctrl_modifier);
 		pusage_key_map = dfl_pusage_key_map;
-	} else {
+	}
+	else
+	{
 		pusage_key_map = btn_map;
 	}
 
-	for (i = 0; i < VEIKK_BTN_COUNT; i++) {
-		#ifdef VEIKK_DEBUG_MODE
+	for (i = 0; i < VEIKK_BTN_COUNT; i++)
+	{
+#ifdef VEIKK_DEBUG_MODE
 		hid_info(hid_dev, "KEY %d VALUE %d", pusage_key_map[i],
-				pusages[i]);
-		#endif	// VEIKK_DEBUG_MODE
+				 pusages[i]);
+#endif // VEIKK_DEBUG_MODE
 		input_report_key(input, pusage_key_map[i], pusages[i]);
 	}
 	return 0;
 }
 
 static int veikk_raw_event(struct hid_device *hid_dev,
-		struct hid_report *report, u8 *data, int size)
+						   struct hid_report *report, u8 *data, int size)
 {
 	struct veikk_device *veikk_dev = hid_get_drvdata(hid_dev);
 	struct input_dev *input;
 	int err;
 
-	switch (report->id) {
+	switch (report->id)
+	{
 	case VEIKK_PEN_REPORT:
 	case VEIKK_STYLUS_REPORT:
 		if (size != sizeof(struct veikk_pen_report))
 			return -EINVAL;
 
 		input = veikk_dev->pen_input;
-		if ((err = veikk_pen_event((struct veikk_pen_report *) data,
-					input)))
+		if ((err = veikk_pen_event((struct veikk_pen_report *)data,
+								   input)))
 			return err;
 		break;
 	case VEIKK_KEYBOARD_REPORT:
 		if (size != sizeof(struct veikk_keyboard_report))
 			return -EINVAL;
 
-		#ifdef VEIKK_DEBUG_MODE
+#ifdef VEIKK_DEBUG_MODE
 		hid_info(hid_dev, "%2x %2x %2x %2x %2x %2x %2x %2x ",
-			data[0], data[1], data[2], data[3],
-			data[4], data[5], data[6], data[7]);
-		#endif	// VEIKK_DEBUG_MODE
+				 data[0], data[1], data[2], data[3],
+				 data[4], data[5], data[6], data[7]);
+#endif // VEIKK_DEBUG_MODE
 
 		input = veikk_dev->keyboard_input;
 		if ((err = veikk_keyboard_event((struct veikk_keyboard_report *)
-				data, input, veikk_dev->model->btn_map)))
+											data,
+										input, veikk_dev->model->btn_map)))
 			return err;
 		break;
 	default:
@@ -270,21 +281,21 @@ static int veikk_raw_event(struct hid_device *hid_dev,
 // called by struct input_dev instances, not called directly
 static int veikk_input_open(struct input_dev *dev)
 {
-	return hid_hw_open((struct hid_device *) input_get_drvdata(dev));
+	return hid_hw_open((struct hid_device *)input_get_drvdata(dev));
 }
 static void veikk_input_close(struct input_dev *dev)
 {
-	hid_hw_close((struct hid_device *) input_get_drvdata(dev));
+	hid_hw_close((struct hid_device *)input_get_drvdata(dev));
 }
 
 static int veikk_register_pen_input(struct input_dev *input,
-		const struct veikk_model *model)
+									const struct veikk_model *model)
 {
 	char *input_name;
 
 	// input name = model name + " Pen"
-	if (!(input_name = devm_kzalloc(&input->dev, strlen(model->name)+5,
-			GFP_KERNEL)))
+	if (!(input_name = devm_kzalloc(&input->dev, strlen(model->name) + 5,
+									GFP_KERNEL)))
 		return -ENOMEM;
 	sprintf(input_name, "%s Pen", model->name);
 	input->name = input_name;
@@ -309,14 +320,14 @@ static int veikk_register_pen_input(struct input_dev *input,
 }
 
 static int veikk_register_keyboard_input(struct input_dev *input,
-		const struct veikk_model *model)
+										 const struct veikk_model *model)
 {
 	char *input_name;
 	int i;
 
 	// input name = model name + " Keyboard"
-	if (!(input_name = devm_kzalloc(&input->dev, strlen(model->name)+9,
-			GFP_KERNEL)))
+	if (!(input_name = devm_kzalloc(&input->dev, strlen(model->name) + 9,
+									GFP_KERNEL)))
 		return -ENOMEM;
 	sprintf(input_name, "%s Keyboard", model->name);
 	input->name = input_name;
@@ -353,16 +364,20 @@ static int veikk_register_input(struct hid_device *hid_dev)
 	int err;
 
 	// setup appropriate input capabilities
-	if (veikk_dev->type == VEIKK_PEN) {
+	if (veikk_dev->type == VEIKK_PEN)
+	{
 		input = veikk_dev->pen_input;
 		if ((err = veikk_register_pen_input(input, model)))
 			return err;
-	} else if (veikk_dev->model->btn_map != veikk_no_btns
-			&& veikk_dev->type == VEIKK_KEYBOARD) {
+	}
+	else if (veikk_dev->model->btn_map != veikk_no_btns && veikk_dev->type == VEIKK_KEYBOARD)
+	{
 		input = veikk_dev->keyboard_input;
 		if ((err = veikk_register_keyboard_input(input, model)))
 			return err;
-	} else {
+	}
+	else
+	{
 		// for S640, since it has no keyboard input
 		return 0;
 	}
@@ -385,7 +400,7 @@ static int veikk_register_input(struct hid_device *hid_dev)
 
 // new device inserted
 static int veikk_probe(struct hid_device *hid_dev,
-		const struct hid_device_id *id)
+					   const struct hid_device_id *id)
 {
 	struct usb_interface *usb_intf = to_usb_interface(hid_dev->dev.parent);
 	struct usb_device *usb_dev = interface_to_usbdev(usb_intf);
@@ -394,45 +409,52 @@ static int veikk_probe(struct hid_device *hid_dev,
 	enum veikk_hid_type dev_type;
 	int err;
 
-	if ((dev_type = veikk_identify_device(hid_dev)) == VEIKK_UNKNOWN) {
+	if ((dev_type = veikk_identify_device(hid_dev)) == VEIKK_UNKNOWN)
+	{
 		hid_err(hid_dev, "could not identify veikk device hid type");
 		return dev_type;
 	}
-	
+
 	// proprietary device emits no events, ignore
 	if (dev_type == VEIKK_PROPRIETARY)
 		return 0;
 
-	if (!id->driver_data) {
+	if (!id->driver_data)
+	{
 		hid_err(hid_dev, "id->driver_data missing");
 		return -EINVAL;
 	}
 
 	// allocate veikk device
 	if (!(veikk_dev = devm_kzalloc(&hid_dev->dev,
-			sizeof(struct veikk_device), GFP_KERNEL))) {
+								   sizeof(struct veikk_device), GFP_KERNEL)))
+	{
 		hid_info(hid_dev, "allocating struct veikk_device");
 		return -ENOMEM;
 	}
-	
+
 	// configure struct veikk_device and set as hid device descriptor
-	veikk_dev->model = (struct veikk_model *) id->driver_data;
+	veikk_dev->model = (struct veikk_model *)id->driver_data;
 	veikk_dev->usb_dev = usb_dev;
 	veikk_dev->type = dev_type;
 	hid_set_drvdata(hid_dev, veikk_dev);
 
-	if ((err = hid_parse(hid_dev))) {
+	if ((err = hid_parse(hid_dev)))
+	{
 		hid_info(hid_dev, "hid_parse");
 		return err;
 	}
 
 	// allocate struct input_devs
 	if (dev_type == VEIKK_PEN && !(veikk_dev->pen_input =
-			devm_input_allocate_device(&hid_dev->dev))) {
+									   devm_input_allocate_device(&hid_dev->dev)))
+	{
 		hid_info(hid_dev, "allocating digitizer input");
 		return -ENOMEM;
-	} else if (dev_type == VEIKK_KEYBOARD && !(veikk_dev->keyboard_input =
-			devm_input_allocate_device(&hid_dev->dev))) {
+	}
+	else if (dev_type == VEIKK_KEYBOARD && !(veikk_dev->keyboard_input =
+												 devm_input_allocate_device(&hid_dev->dev)))
+	{
 		hid_info(hid_dev, "allocating keyboard input");
 		return -ENOMEM;
 	}
@@ -456,48 +478,55 @@ static int veikk_probe(struct hid_device *hid_dev,
 	 * appropriate pointers to the other device's inputs and add it to the
 	 * linked list; else it is the first device, just add to list
 	 */
-	list_for_each(lh, &veikk_devs) {
+	list_for_each(lh, &veikk_devs)
+	{
 		veikk_dev_it = list_entry(lh, struct veikk_device, lh);
 
 		if (veikk_dev_it->usb_dev != veikk_dev->usb_dev)
 			continue;
 
-		if (dev_type == VEIKK_PEN) {
+		if (dev_type == VEIKK_PEN)
+		{
 			veikk_dev_it->pen_input = veikk_dev->pen_input;
 			veikk_dev->keyboard_input =
-					veikk_dev_it->keyboard_input;
-		} else {
+				veikk_dev_it->keyboard_input;
+		}
+		else
+		{
 			veikk_dev->pen_input = veikk_dev_it->pen_input;
 			veikk_dev_it->keyboard_input =
-					veikk_dev->keyboard_input;
+				veikk_dev->keyboard_input;
 		}
 		break;
 	}
 	list_add(&veikk_dev->lh, &veikk_devs);
 	mutex_unlock(&veikk_devs_mutex);
 
-	if ((err = veikk_register_input(hid_dev))) {
+	if ((err = veikk_register_input(hid_dev)))
+	{
 		hid_err(hid_dev, "error registering inputs");
 		return err;
 	}
 
-	if ((err = hid_hw_start(hid_dev, HID_CONNECT_HIDRAW
-			| HID_CONNECT_DRIVER))) {
+	if ((err = hid_hw_start(hid_dev, HID_CONNECT_HIDRAW | HID_CONNECT_DRIVER)))
+	{
 		hid_err(hid_dev, "error signaling hardware start");
 		return err;
 	}
 
-	#ifdef VEIKK_DEBUG_MODE
+#ifdef VEIKK_DEBUG_MODE
 	hid_info(hid_dev, "%s probed successfully.", veikk_dev->model->name);
-	#endif	// VEIKK_DEBUG_MODE
+#endif // VEIKK_DEBUG_MODE
 	return 0;
 }
 
 // TODO: be more careful with resources if unallocated
-static void veikk_remove(struct hid_device *hid_dev) {
+static void veikk_remove(struct hid_device *hid_dev)
+{
 	struct veikk_device *veikk_dev = hid_get_drvdata(hid_dev);
 
-	if (veikk_dev) {
+	if (veikk_dev)
+	{
 		mutex_lock(&veikk_devs_mutex);
 		list_del(&veikk_dev->lh);
 		mutex_unlock(&veikk_devs_mutex);
@@ -505,9 +534,9 @@ static void veikk_remove(struct hid_device *hid_dev) {
 		hid_hw_stop(hid_dev);
 	}
 
-	#ifdef VEIKK_DEBUG_MODE
+#ifdef VEIKK_DEBUG_MODE
 	hid_info(hid_dev, "device removed successfully.");
-	#endif	// VEIKK_DEBUG_MODE
+#endif // VEIKK_DEBUG_MODE
 }
 
 /*
@@ -517,56 +546,76 @@ static void veikk_remove(struct hid_device *hid_dev) {
  * TODO: need to get button map for some devices
  */
 static struct veikk_model veikk_model_0x0001 = {
-	.name = "VEIKK S640", .prod_id = 0x0001,
-	.x_max = 32768, .y_max = 32768, .pressure_max = 8192,
-	.btn_map = veikk_no_btns
-};
+	.name = "VEIKK S640",
+	.prod_id = 0x0001,
+	.x_max = 32768,
+	.y_max = 32768,
+	.pressure_max = 8192,
+	.btn_map = veikk_no_btns};
 static struct veikk_model veikk_model_0x0002 = {
-	.name = "VEIKK A30", .prod_id = 0x0002,
-	.x_max = 32768, .y_max = 32768, .pressure_max = 8192,
-	.btn_map = veikk_no_btns
-};
+	.name = "VEIKK A30",
+	.prod_id = 0x0002,
+	.x_max = 32768,
+	.y_max = 32768,
+	.pressure_max = 8192,
+	.btn_map = veikk_no_btns};
 static struct veikk_model veikk_model_0x0003 = {
-	.name = "VEIKK A50", .prod_id = 0x0003,
-	.x_max = 32768, .y_max = 32768, .pressure_max = 8192,
-	.btn_map = (int[]) {
-		BTN_0, BTN_1, BTN_2, BTN_3, BTN_4, BTN_5, BTN_6, BTN_7,
-		0, KEY_DOWN, KEY_UP, KEY_LEFT, KEY_RIGHT
-	}
-};
+	.name = "VEIKK A50",
+	.prod_id = 0x0003,
+	.x_max = 32768,
+	.y_max = 32768,
+	.pressure_max = 8192,
+	.btn_map = (int[]){BTN_0, BTN_1, BTN_2, BTN_3, BTN_4, BTN_5, BTN_6, BTN_7, 0, KEY_DOWN, KEY_UP, KEY_LEFT, KEY_RIGHT}};
 static struct veikk_model veikk_model_0x0004 = {
-	.name = "VEIKK A15", .prod_id = 0x0004,
-	.x_max = 32768, .y_max = 32768, .pressure_max = 8192,
-	.btn_map = veikk_no_btns
-};
+	.name = "VEIKK A15",
+	.prod_id = 0x0004,
+	.x_max = 32768,
+	.y_max = 32768,
+	.pressure_max = 8192,
+	.btn_map = veikk_no_btns};
 static struct veikk_model veikk_model_0x0006 = {
-	.name = "VEIKK A15 Pro", .prod_id = 0x0006,
-	.x_max = 32768, .y_max = 32768, .pressure_max = 8192,
-	.btn_map = veikk_no_btns
-};
+	.name = "VEIKK A15 Pro",
+	.prod_id = 0x0006,
+	.x_max = 32768,
+	.y_max = 32768,
+	.pressure_max = 8192,
+	// .btn_map = dfl_pusage_key_map};
+	.btn_map = (int[]){
+		// BTN_WHEEL,
+		KEY_0,	   // K1
+		KEY_1,	   // K2
+		KEY_SPACE, // wheel button
+		KEY_2,	   // K3
+		KEY_3,
+		KEY_4,
+		KEY_5, // K4
+		KEY_6,
+		KEY_7,
+		KEY_DOWN, // wheel anti-clockwise
+		KEY_UP,	  // wheel clockwise
+		KEY_8,
+		KEY_9}};
 static struct veikk_model veikk_model_0x1001 = {
-	.name = "VEIKK VK1560", .prod_id = 0x1001,
-	.x_max = 27536, .y_max = 15488, .pressure_max = 8192,
-	.btn_map = (int[]) {
-		BTN_0, BTN_1, BTN_2, 0, BTN_3, BTN_4, BTN_5, BTN_6,
-		BTN_WHEEL, KEY_DOWN, KEY_UP, KEY_LEFT, KEY_RIGHT
-	}
-};
+	.name = "VEIKK VK1560",
+	.prod_id = 0x1001,
+	.x_max = 27536,
+	.y_max = 15488,
+	.pressure_max = 8192,
+	.btn_map = (int[]){BTN_0, BTN_1, BTN_2, 0, BTN_3, BTN_4, BTN_5, BTN_6, BTN_WHEEL, KEY_DOWN, KEY_UP, KEY_LEFT, KEY_RIGHT}};
 // TODO: add more tablets
 
 // register models for hotplugging
-#define VEIKK_MODEL(prod)\
-	HID_USB_DEVICE(VEIKK_VENDOR_ID, prod),\
-	.driver_data = (u64) &veikk_model_##prod
+#define VEIKK_MODEL(prod)                  \
+	HID_USB_DEVICE(VEIKK_VENDOR_ID, prod), \
+		.driver_data = (u64)&veikk_model_##prod
 static const struct hid_device_id veikk_model_ids[] = {
-	{ VEIKK_MODEL(0x0001) },	// S640
-	{ VEIKK_MODEL(0x0002) },	// A30
-	{ VEIKK_MODEL(0x0003) },	// A50
-	{ VEIKK_MODEL(0x0004) },	// A15
-	{ VEIKK_MODEL(0x0006) },	// A15 Pro
-	{ VEIKK_MODEL(0x1001) },	// VK1560
-	{ }
-};
+	{VEIKK_MODEL(0x0001)}, // S640
+	{VEIKK_MODEL(0x0002)}, // A30
+	{VEIKK_MODEL(0x0003)}, // A50
+	{VEIKK_MODEL(0x0004)}, // A15
+	{VEIKK_MODEL(0x0006)}, // A15 Pro
+	{VEIKK_MODEL(0x1001)}, // VK1560
+	{}};
 MODULE_DEVICE_TABLE(hid, veikk_model_ids);
 
 // register driver
@@ -577,14 +626,14 @@ static struct hid_driver veikk_driver = {
 	.remove = veikk_remove,
 	.raw_event = veikk_raw_event,
 
-	/*
+/*
 	 * the following are for debugging, .raw_event is the only one used
 	 * for real event reporting
 	 */
-	#ifdef VEIKK_DEBUG_MODE
+#ifdef VEIKK_DEBUG_MODE
 	.report = veikk_report,
 	.event = veikk_event,
-	#endif	// VEIKK_DEBUG_MODE
+#endif // VEIKK_DEBUG_MODE
 };
 module_hid_driver(veikk_driver);
 
