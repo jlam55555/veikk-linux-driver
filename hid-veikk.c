@@ -125,6 +125,31 @@ static const s8 usage_pusage_map[64] = {
 	12, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 0, -1, // 3
 };
 
+// create a separate map for a15 pro to avoid collisions,
+// merge with original map later
+// 0, 1, 2 (wheel button, clockwise/anticlockwise rotation), 3, 4 (K1, K2), 5, 6 (K3, K4), 7, 8 (K5, K6), 9, 10 (K7, K8), 11, 12 (K9, K10), 13, 14 (K11, K12 - disabled for now)
+// 2c, 2d, 2e,												3e, 19,		   2c, 1d,		  __, __,		 __, 4c, 		  __, __,			__, __.
+static const s8 a15_pro_usage_pusage_map[256] = {
+	//	  0   1   2   3   4   5   6   7   8   9   a   b   c   d   e   f
+	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 04, -1, -1, -1, // 0
+	-1, -1, -1, -1, -1, -1, -1, -1, -1, 05, -1, -1, -1, 06, -1, -1, // 1
+	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 00, 01, 02, -1, // 2
+	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 03, -1, // 3
+	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 10, -1, -1, -1, // 4
+	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, // 5
+	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, // 6
+	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, // 7
+	7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,					// 8
+	7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,					// 9
+	7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,					// a
+	7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,					// b
+	7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,					// c
+	7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,					// d
+	7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,					// e
+	7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,					// f
+};
+//
+
 // default map (control modifier will be placed separately)
 static const int dfl_pusage_key_map[VEIKK_BTN_COUNT] = {
 	KEY_F5, KEY_I, KEY_SPACE, KEY_V, KEY_C, KEY_V, KEY_Z, KEY_S,
@@ -199,7 +224,8 @@ static int veikk_keyboard_event(struct veikk_keyboard_report *evt,
 	// fill pseudo-usages map; this is independent of device
 	for (i = 0; i < /*6*/ VEIKK_BTN_COUNT && evt->btns[i]; ++i)
 	{
-		if ((pusage = usage_pusage_map[evt->btns[i]]) == -1)
+		// temporarily use a15_pro map, change back to default map later
+		if ((pusage = a15_pro_usage_pusage_map[evt->btns[i]]) == -1)
 			return -EINVAL;
 		++pusages[pusage];
 	}
@@ -579,22 +605,23 @@ static struct veikk_model veikk_model_0x0006 = {
 	.x_max = 32768,
 	.y_max = 32768,
 	.pressure_max = 8192,
-	// .btn_map = dfl_pusage_key_map};
+	// 0, 1, 2 (wheel button, clockwise/anticlockwise rotation),
+	// 3, 4 (K1, K2), 5, 6 (K3, K4), 7, 8 (K5, K6), 9, 10 (K7, K8),
+	// 11, 12 (K9, K10), 13, 14 (K11, K12 - disabled for now)
 	.btn_map = (int[]){
-		// BTN_WHEEL,
-		KEY_0,	   // K1
-		KEY_1,	   // K2
-		KEY_SPACE, // wheel button
-		KEY_2,	   // K3
+		KEY_SPACE,
+		KEY_DOWN,
+		KEY_UP,
+		KEY_1,
+		KEY_2,
 		KEY_3,
 		KEY_4,
-		KEY_5, // K4
+		KEY_5,
 		KEY_6,
 		KEY_7,
-		KEY_DOWN, // wheel anti-clockwise
-		KEY_UP,	  // wheel clockwise
 		KEY_8,
-		KEY_9}};
+		KEY_9,
+		KEY_0}};
 static struct veikk_model veikk_model_0x1001 = {
 	.name = "VEIKK VK1560",
 	.prod_id = 0x1001,
