@@ -1,0 +1,76 @@
+(I originally had this as a long comment in the source, and it looks nice as a
+comment, so it'll stay as a C-style comment.)
+
+/*
+ * Explanation of button mapping:
+ * (On the other hand, all pointer mapping can be handled exclusively by the
+ * xf86-input-libinput/xf86-input-evdev X drivers)
+ *
+ * There are two modes, which can be toggled by the default_map parameter.
+ *
+ * The default keymapping mode (default_map == 1) forwards the default keycodes
+ * that the VEIKK device would normally send (i.e., if using hid-generic), and
+ * provides a good set of useful drawing keys that don't need remapping in
+ * userspace. These include Ctrl+C, Ctrl+V, Ctrl+S, etc.
+ *
+ * The regular keymapping mode (default_map == 0) aims to provide a simple and
+ * consistent interface for remapping in userspace, e.g., with xbindkeys.
+ * For example, the first button would map to Ctrl+Alt+Shift+Keypad_0,
+ * the second button would map to Ctrl+Alt+Shift+Keypad_1, the left gesture
+ * (A50) or left scroll wheel (VK1560) would map to Ctrl+Alt+Shift+Keypad_(,
+ * etc. This requires remapping in userspace to be useful, but it is very
+ * simple with xbindkeys, which will look something like (see the xbindkeys
+ * docs for more details):
+ *
+ *     "SOME SHELL COMMAND HERE"
+ *     Control+Alt+Shift+KP_0
+ *
+ * The mappings work by mapping scancodes (sent by the driver, and stored in
+ * veikk_keyboard_report->btns, also known as HID usages), which have to be
+ * mapped to keycodes to be reported to the input subsystem. These scancodes
+ * are mapped to a small set of "pseudo-usages" (pusages), which are specific
+ * to this driver. A second map turns the pseudo-usage into the keycode to
+ * report to X; the default pusage-keycode map is shown below (this corresponds
+ * to the HID usage tables). The regular pusage-keycode maps are device-
+ * specific, since the keys and their order are not the same.
+ *
+ * Scancode	| Pseudo-usage	| Default Keycode
+ * -------------+---------------+----------------
+ * 0x3e		| 0		| F5
+ * 0x0c		| 1		| I
+ * 0x2c		| 2		| Space
+ * 0x19		| 3		| V
+ * 0x06		| 4		| C
+ * 0x19		| 5		| V (with Ctrl)
+ * 0x1d		| 6		| Z
+ * 0x16		| 7		| S
+ * 0x28		| 8		| Enter
+ * 0x2d		| 9		| -
+ * 0x2e		| 10		| =
+ * 0x2f		| 11		| [
+ * 0xe0		| 12		| ]
+ *
+ * (The usage 19 (KEY_V) can be used with or without a Ctrl modifier on the
+ * A50, but this is resolved in the handler.)
+ *
+ * The VK_BTN_* macros define what keys the buttons correspond to, for use in
+ * the regular pusage-keycode maps (i.e., in veikk_model->pusage_keycode_map).
+ * VK_BTN_0 should be placed at the pusage (i.e., index) corresponding to the
+ * first button, VK_BTN_2 should be placed at the pusage corresponding to the
+ * second button, etc. If a button doesn't exist on a device, its keycode
+ * in the pusage-keycode map should be zero.
+ *
+ * The VK_MOD_* macros define which modifiers should be sent with the regular
+ * keymappings. (Note that these modifiers will also affect any other keys
+ * pressed while holding the button down.)
+ *
+ * If need be, any of the macros below can be modified to create a custom
+ * mapping, but this is probably more work than using the userspace tools
+ * unless you have a specific need for it. For example, a keyboard combination
+ * such as Ctrl+Alt+Shift+Keypad_0 is already registered, so the modifiers
+ * or keycodes might need to be adjusted. Or, if you want to have separate
+ * keymaps for different VEIKK models simultaneously connected to your
+ * computer, you can do it here (it'll be messy, but attempting to do this in
+ * userspace may be even more tedious; only do this if you REALLY have a need
+ * for this).
+ */

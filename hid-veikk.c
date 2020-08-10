@@ -28,11 +28,6 @@
 #define VEIKK_BTN_STYLUS	0x2
 #define VEIKK_BTN_STYLUS2	0x4
 
-#define VEIKK_BTN_COUNT		13
-
-// TODO: turn this into a sysfs parameter; macro used just for simplicity
-#define VEIKK_DFL_BTNS		0
-
 // raw report structures
 struct veikk_pen_report {
 	u8 report_id;
@@ -63,7 +58,7 @@ struct veikk_model {
 	const int x_max, y_max, pressure_max;
 
 	// button mapping; should be an array of length VEIKK_BTN_COUNT
-	const int *btn_map;
+	const int *pusage_keycode_map;
 };
 
 // veikk hid device descriptor
@@ -90,28 +85,32 @@ struct mutex veikk_devs_mutex;
 LIST_HEAD(veikk_devs);
 DEFINE_MUTEX(veikk_devs_mutex);
 
-// veikk_event and veikk_report are only used for debugging
-#ifdef VEIKK_DEBUG_MODE
-static int veikk_event(struct hid_device *hdev, struct hid_field *field,
-		struct hid_usage *usage, __s32 value)
-{
-	hid_info(hdev, "in veikk_event: usage %x value %d", usage->hid, value);
-	return 0;
-}
-void veikk_report(struct hid_device *hid_dev, struct hid_report *report)
-{
-	hid_info(hid_dev, "in veikk_report: report id %d", report->id);
-}
-#endif	// VEIKK_DEBUG_MODE
+// See BUTTON_MAPPING.txt for an in-depth explanation of button mapping
+#define VK_BTN_0		KEY_KP0
+#define	VK_BTN_1		KEY_KP1
+#define VK_BTN_2		KEY_KP2
+#define VK_BTN_3		KEY_KP3
+#define	VK_BTN_4		KEY_KP4
+#define VK_BTN_5		KEY_KP5
+#define VK_BTN_6		KEY_KP6
+#define VK_BTN_7		KEY_KP7
+#define VK_BTN_ENTER		KEY_ENTER
+#define VK_BTN_LEFT		KEY_KPLEFTPAREN
+#define VK_BTN_RIGHT		KEY_KPRIGHTPAREN
+#define VK_BTN_UP		KEY_KPPLUS
+#define VK_BTN_DOWN		KEY_KPMINUS
 
-/*
- * possible VEIKK buttons; these indices will be "pseudo-usages" ("pusage"s)
- * used to remap to specific keys, depending on the device
- *  0,  1,  2,  3,  4,        5,  6,  7,  8,  9, 10, 11, 12
- * 3e, 0c, 2c, 19, 06, 19+Ctrl*, 1d, 16, 28, 2d, 2e, 2f, e0
- * note that the usage 19 (KEY_V) can be used with or without a Ctrl modifier
- * on the A50, but this is resolved in the handler
- */
+#define VK_MOD_CTRL		1
+#define VK_MOD_SHIFT		1
+#define VK_MOD_ALT		1
+
+// don't change this unless a new scancode has been found
+#define VEIKK_BTN_COUNT		13
+
+// 1 for default mode, 0 for regular mode
+// TODO: turn this into a sysfs parameter; macro used just for simplicity
+#define VEIKK_DFL_BTNS		0
+
 static const s8 usage_pusage_map[64] = {
 //	  0   1   2   3   4   5   6   7   8   9   a   b   c   d   e   f
 	 -1, -1, -1, -1, -1, -1,  4, -1, -1, -1, -1, -1,  1, -1, -1, -1, // 0
@@ -128,6 +127,20 @@ static const int dfl_pusage_key_map[VEIKK_BTN_COUNT] = {
 
 // use this map as a symbol for the device having no buttons (e.g., for S640)
 static const int veikk_no_btns[VEIKK_BTN_COUNT];
+
+// veikk_event and veikk_report are only used for debugging
+#ifdef VEIKK_DEBUG_MODE
+static int veikk_event(struct hid_device *hdev, struct hid_field *field,
+		struct hid_usage *usage, __s32 value)
+{
+	hid_info(hdev, "in veikk_event: usage %x value %d", usage->hid, value);
+	return 0;
+}
+void veikk_report(struct hid_device *hid_dev, struct hid_report *report)
+{
+	hid_info(hid_dev, "in veikk_report: report id %d", report->id);
+}
+#endif	// VEIKK_DEBUG_MODE
 
 /*
  * identify veikk type by report parsing; pen input, keyboard input, or
@@ -187,9 +200,9 @@ static int veikk_pen_event(struct veikk_pen_report *evt,
 }
 
 static int veikk_keyboard_event(struct veikk_keyboard_report *evt,
-		struct input_dev *input, const int *btn_map)
+		struct input_dev *input, const int *pusage_keycode_map)
 {
-	u8 pusages[VEIKK_BTN_COUNT] = { 0 }, i;
+	u8 pusages[VEIKK_BTN_COUNT] = { 0 }, i, keys_pressed;
 	s8 pusage;
 	const int *pusage_key_map;
 
@@ -207,11 +220,19 @@ static int veikk_keyboard_event(struct veikk_keyboard_report *evt,
 	}
 
 	// if default mapping; also report ctrl
-	if (VEIKK_DFL_BTNS || btn_map == veikk_no_btns) {
-		input_report_key(input, KEY_LEFTCTRL, evt->ctrl_modifier);
+	if (VEIKK_DFL_BTNS || pusage_keycode_map == veikk_no_btns) {
 		pusage_key_map = dfl_pusage_key_map;
+		input_report_key(input, KEY_LEFTCTRL, evt->ctrl_modifier);
 	} else {
-		pusage_key_map = btn_map;
+		pusage_key_map = pusage_keycode_map;
+		// if any keys pressed, add Ctrl+Alt+Shift modifiers
+		keys_pressed = !!evt->btns[0];
+		if (VK_MOD_CTRL)
+			input_report_key(input, KEY_LEFTCTRL, keys_pressed);
+		if (VK_MOD_ALT)
+			input_report_key(input, KEY_LEFTALT, keys_pressed);
+		if (VK_MOD_SHIFT)
+			input_report_key(input, KEY_LEFTSHIFT, keys_pressed);
 	}
 
 	for (i = 0; i < VEIKK_BTN_COUNT; i++) {
@@ -253,8 +274,9 @@ static int veikk_raw_event(struct hid_device *hid_dev,
 		#endif	// VEIKK_DEBUG_MODE
 
 		input = veikk_dev->keyboard_input;
-		if ((err = veikk_keyboard_event((struct veikk_keyboard_report *)
-				data, input, veikk_dev->model->btn_map)))
+		if ((err = veikk_keyboard_event(
+				(struct veikk_keyboard_report *) data, input,
+				veikk_dev->model->pusage_keycode_map)))
 			return err;
 		break;
 	default:
@@ -328,12 +350,16 @@ static int veikk_register_keyboard_input(struct input_dev *input,
 	__set_bit(EV_REP, input->evbit);
 	__set_bit(MSC_SCAN, input->mscbit);
 
+	// modifiers; sent out both by default and regular map
+	__set_bit(KEY_LEFTCTRL, input->keybit);
+	__set_bit(KEY_LEFTALT, input->keybit);
+	__set_bit(KEY_LEFTSHIFT, input->keybit);
+
 	// possible keys sent out by regular map
 	for (i = 0; i < VEIKK_BTN_COUNT; ++i)
-		__set_bit(model->btn_map[i], input->keybit);
+		__set_bit(model->pusage_keycode_map[i], input->keybit);
 
 	// possible keys sent out by default map
-	__set_bit(KEY_LEFTCTRL, input->keybit);
 	for (i = 0; i < VEIKK_BTN_COUNT; ++i)
 		__set_bit(dfl_pusage_key_map[i], input->keybit);
 
@@ -357,7 +383,7 @@ static int veikk_register_input(struct hid_device *hid_dev)
 		input = veikk_dev->pen_input;
 		if ((err = veikk_register_pen_input(input, model)))
 			return err;
-	} else if (veikk_dev->model->btn_map != veikk_no_btns
+	} else if (veikk_dev->model->pusage_keycode_map != veikk_no_btns
 			&& veikk_dev->type == VEIKK_KEYBOARD) {
 		input = veikk_dev->keyboard_input;
 		if ((err = veikk_register_keyboard_input(input, model)))
@@ -511,45 +537,47 @@ static void veikk_remove(struct hid_device *hid_dev) {
 }
 
 /*
- * list of veikk models; see usage_pusage_map for more details on the
- * button_map field
+ * List of veikk models; see BUTTON_MAPPING.txt for more information on the
+ * pusage_keycode_map field
  *
  * TODO: need to get button map for some devices
  */
 static struct veikk_model veikk_model_0x0001 = {
 	.name = "VEIKK S640", .prod_id = 0x0001,
 	.x_max = 32768, .y_max = 32768, .pressure_max = 8192,
-	.btn_map = veikk_no_btns
+	.pusage_keycode_map = veikk_no_btns
 };
 static struct veikk_model veikk_model_0x0002 = {
 	.name = "VEIKK A30", .prod_id = 0x0002,
 	.x_max = 32768, .y_max = 32768, .pressure_max = 8192,
-	.btn_map = veikk_no_btns
+	.pusage_keycode_map = veikk_no_btns
 };
 static struct veikk_model veikk_model_0x0003 = {
 	.name = "VEIKK A50", .prod_id = 0x0003,
 	.x_max = 32768, .y_max = 32768, .pressure_max = 8192,
-	.btn_map = (int[]) {
-		BTN_0, BTN_1, BTN_2, BTN_3, BTN_4, BTN_5, BTN_6, BTN_7,
-		0, KEY_DOWN, KEY_UP, KEY_LEFT, KEY_RIGHT
+	.pusage_keycode_map = (int[]) {
+		VK_BTN_0, VK_BTN_1, VK_BTN_2, VK_BTN_3,
+		VK_BTN_4, VK_BTN_5, VK_BTN_6, VK_BTN_7,
+		0, VK_BTN_DOWN, VK_BTN_UP, VK_BTN_LEFT, VK_BTN_RIGHT
 	}
 };
 static struct veikk_model veikk_model_0x0004 = {
 	.name = "VEIKK A15", .prod_id = 0x0004,
 	.x_max = 32768, .y_max = 32768, .pressure_max = 8192,
-	.btn_map = veikk_no_btns
+	.pusage_keycode_map = veikk_no_btns
 };
 static struct veikk_model veikk_model_0x0006 = {
 	.name = "VEIKK A15 Pro", .prod_id = 0x0006,
 	.x_max = 32768, .y_max = 32768, .pressure_max = 8192,
-	.btn_map = veikk_no_btns
+	.pusage_keycode_map = veikk_no_btns
 };
 static struct veikk_model veikk_model_0x1001 = {
 	.name = "VEIKK VK1560", .prod_id = 0x1001,
 	.x_max = 27536, .y_max = 15488, .pressure_max = 8192,
-	.btn_map = (int[]) {
-		BTN_0, BTN_1, BTN_2, 0, BTN_3, BTN_4, BTN_5, BTN_6,
-		BTN_WHEEL, KEY_DOWN, KEY_UP, KEY_LEFT, KEY_RIGHT
+	.pusage_keycode_map = (int[]) {
+		VK_BTN_0, VK_BTN_1, VK_BTN_2, 0,
+		VK_BTN_3, VK_BTN_4, VK_BTN_5, VK_BTN_6,
+		VK_BTN_ENTER, VK_BTN_DOWN, VK_BTN_UP, VK_BTN_LEFT, VK_BTN_RIGHT
 	}
 };
 // TODO: add more tablets
