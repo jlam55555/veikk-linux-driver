@@ -551,7 +551,11 @@ static struct veikk_model veikk_model_0x0001 = {
 static struct veikk_model veikk_model_0x0002 = {
 	.name = "VEIKK A30", .prod_id = 0x0002,
 	.x_max = 32768, .y_max = 32768, .pressure_max = 8192,
-	.pusage_keycode_map = veikk_no_btns
+	.pusage_keycode_map = (int[]) {
+		VK_BTN_2, VK_BTN_1, VK_BTN_0, 0,
+		0, 0, VK_BTN_4, 0,
+		0, VK_BTN_DOWN, VK_BTN_UP, VK_BTN_LEFT, VK_BTN_RIGHT
+	}
 };
 static struct veikk_model veikk_model_0x0003 = {
 	.name = "VEIKK A50", .prod_id = 0x0003,
