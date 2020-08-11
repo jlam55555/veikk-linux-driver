@@ -12,7 +12,7 @@
 #include <linux/usb.h>
 
 // comment the following line to disable debugging output in kernel log (dmesg)
-//#define VEIKK_DEBUG_MODE	1
+#define VEIKK_DEBUG_MODE	1
 
 #define VEIKK_VENDOR_ID		0x2FEB
 #define VEIKK_DRIVER_VERSION	"3.0.0"
@@ -237,7 +237,8 @@ static int veikk_keyboard_event(struct veikk_keyboard_report *evt,
 
 	for (i = 0; i < VEIKK_BTN_COUNT; i++) {
 		#ifdef VEIKK_DEBUG_MODE
-		hid_info(hid_dev, "KEY %d VALUE %d", pusage_key_map[i],
+		hid_info((struct hid_device *) input_get_drvdata(input),
+				"KEY %d VALUE %d", pusage_key_map[i],
 				pusages[i]);
 		#endif	// VEIKK_DEBUG_MODE
 		input_report_key(input, pusage_key_map[i], pusages[i]);
