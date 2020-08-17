@@ -429,62 +429,6 @@ static int veikk_setup_gesture_pad_input(struct input_dev *input,
 	return 0;
 }
 
-/*
- * register input for a struct hid_device. This depends on the device type.
- * returns -errno on failure
- */
-/*static int veikk_register_input(struct hid_device *hid_dev)
-{
-	struct veikk_device *veikk_dev = hid_get_drvdata(hid_dev);
-	const struct veikk_model *model = veikk_dev->model;
-	struct input_dev *pen_input, *buttons_input;
-	int err;
-
-	// setup appropriate input capabilities
-	//if (veikk_dev->type == VEIKK_PROPRIETARY) {
-		pen_input = veikk_dev->pen_input;
-		if ((err = veikk_register_pen_input(pen_input, model)))
-			return err;
-	//}
-	//if (veikk_dev->type == VEIKK_PROPRIETARY) {
-	//} else if (veikk_dev->model->pusage_keycode_map != veikk_no_btns
-	//		&& veikk_dev->type == VEIKK_KEYBOARD) {
-		buttons_input = veikk_dev->buttons_input;
-		if ((err = veikk_register_buttons_input(buttons_input, model)))
-			return err;*/
-	/*} else {
-		// for S640, since it has no buttons input
-		return 0;
-	}*/
-
-	// common registration for pen and buttons
-/*	pen_input->open = veikk_input_open;
-	pen_input->close = veikk_input_close;
-	pen_input->phys = hid_dev->phys;
-	pen_input->uniq = hid_dev->uniq;
-	pen_input->id.bustype = hid_dev->bus;
-	pen_input->id.vendor = hid_dev->vendor;
-	pen_input->id.product = hid_dev->product;
-	pen_input->id.version = hid_dev->version;
-
-	buttons_input->open = veikk_input_open;
-	buttons_input->close = veikk_input_close;
-	buttons_input->phys = hid_dev->phys;
-	buttons_input->uniq = hid_dev->uniq;
-	buttons_input->id.bustype = hid_dev->bus;
-	buttons_input->id.vendor = hid_dev->vendor;
-	buttons_input->id.product = hid_dev->product;
-	buttons_input->id.version = hid_dev->version;
-
-	// needed for veikk_input_open/veikk_input_close
-	input_set_drvdata(pen_input, hid_dev);
-
-	input_set_drvdata(buttons_input, hid_dev);
-
-	input_register_device(pen_input);
-	return input_register_device(buttons_input);
-}*/
-
 static int veikk_register_input(struct input_dev *input,
 			struct hid_device *hid_dev)
 {
