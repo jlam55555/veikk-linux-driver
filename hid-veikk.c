@@ -79,7 +79,7 @@ struct veikk_device {
 	// linked-list header
 	struct list_head lh;
 
-	struct delayed_work setup_work;
+	struct delayed_work setup_work, setup_work2;
 	struct hid_device *hid_dev;
 };
 
@@ -439,6 +439,22 @@ void veikkinit(struct work_struct *work)
 	hid_info(veikk_dev->hid_dev, "END IN VEIKKINIT");
 }
 
+void veikkinit2(struct work_struct *work)
+{
+	struct delayed_work *dwork;
+	struct veikk_device *veikk_dev;
+
+	dwork = container_of(work, struct delayed_work, work);
+	veikk_dev = container_of(dwork, struct veikk_device, setup_work2);
+
+	hid_info(veikk_dev->hid_dev, "IN VEIKKINIT2");
+	u8 buf2[9] = { 0x09, 0x02, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+	u8 *b2 = devm_kzalloc(&veikk_dev->hid_dev->dev, 9, GFP_KERNEL);
+	memcpy(b2, buf2, 9);
+	veikk_dev->hid_dev->ll_driver->output_report(veikk_dev->hid_dev, b2, 9);
+	hid_info(veikk_dev->hid_dev, "END IN VEIKKINIT2");
+}
+
 // new device inserted
 static int veikk_probe(struct hid_device *hid_dev,
 		const struct hid_device_id *id)
@@ -570,15 +586,21 @@ static int veikk_probe(struct hid_device *hid_dev,
 	switch (dev_type) {
 	case VEIKK_PROPRIETARY:
 		hid_dev->ll_driver->output_report(hid_dev, b1, 9);
-		hid_dev->ll_driver->output_report(hid_dev, b2, 9);
+
+		INIT_DELAYED_WORK(&veikk_dev->setup_work2, veikkinit2);
+		schedule_delayed_work(&veikk_dev->setup_work2, 200);
+		//hid_dev->ll_driver->output_report(hid_dev, b2, 9);
 		//hid_dev->ll_driver->output_report(hid_dev, b3, 9);
 
 		//workqueue_t workqueue = *create_workqueue("veikkinit");
 		//DECLARE_DELAYED_WORK(setup_gesture_pad, veikkinit, hid_dev)
 		// timeout is arbitrary for now
 		// don't need dedicated workqueue, just use global one
-		INIT_DELAYED_WORK(&veikk_dev->setup_work, veikkinit);
-		schedule_delayed_work(&veikk_dev->setup_work, 100);
+		// only for A50
+		//if (veikk_dev->model->prod_id == 0x0003) {
+			INIT_DELAYED_WORK(&veikk_dev->setup_work, veikkinit);
+			schedule_delayed_work(&veikk_dev->setup_work, 100);
+		//}
 
 		// schedule_delayed_work(setup_gesture_pad, 100);
 		//queue_delayed_work(workqueue, setup_gesture_pad, 100);
