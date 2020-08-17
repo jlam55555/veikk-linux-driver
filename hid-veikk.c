@@ -21,6 +21,7 @@
 #define VEIKK_DRIVER_AUTHOR	"Jonathan Lam <jlam55555@gmail.com>"
 #define VEIKK_DRIVER_LICENSE	"GPL"
 
+// TODO: update/remove these
 #define VEIKK_PEN_REPORT	0x1
 #define VEIKK_STYLUS_REPORT	0x2
 #define VEIKK_KEYBOARD_REPORT	0x3
@@ -30,6 +31,7 @@
 #define VEIKK_BTN_STYLUS2	0x4
 
 // raw report structures
+// TODO: update/remove these
 struct veikk_pen_report {
 	u8 report_id;
 	u8 btns;
@@ -40,46 +42,22 @@ struct veikk_keyboard_report {
 	u8 btns[6];
 };
 
-// types of veikk hid_devices; see quirks for more details because keyboard
-// and digitizer inputs are not exact
-enum veikk_hid_type {
-	VEIKK_UNKNOWN = -EINVAL,	// erroroneous report format
-	VEIKK_PROPRIETARY = 0,		// this input to be ignored
-	VEIKK_KEYBOARD,			// keyboard input
-	VEIKK_PEN			// pen (drawing pad) input
-};
-
-// veikk model descriptor
+// veikk model characteristics
 struct veikk_model {
-	// basic parameters
 	const char *name;
 	const int prod_id;
-
-	// drawing pad physical characteristics
 	const int x_max, y_max, pressure_max;
 
-	// button mapping; should be an array of length VEIKK_BTN_COUNT
+	// TODO: remove this
 	const int *pusage_keycode_map;
 };
 
-// veikk hid device descriptor
+// veikk device descriptor
 struct veikk_device {
-	// hardware details
-	struct usb_device *usb_dev;
-
-	// device type
-	enum veikk_hid_type type;
-
-	// model-specific properties
 	const struct veikk_model *model;
-
-	// input devices
 	struct input_dev *pen_input, *keyboard_input;
-
-	// linked-list header
-	struct list_head lh;
-
-	struct delayed_work setup_work, setup_work2;
+	struct delayed_work setup_pen_work, setup_keyboard_work,
+			setup_gesture_pad_work;
 	struct hid_device *hid_dev;
 };
 
@@ -147,46 +125,22 @@ void veikk_report(struct hid_device *hid_dev, struct hid_report *report)
 #endif	// VEIKK_DEBUG_MODE
 
 /*
- * identify veikk type by report parsing; pen input, keyboard input, or
- * proprietary; the distinction is not so clean, so this is not so clean;
- * returns -EINVAL if type not recognized; can be thought of as a very
- * simple custom hid_parse becauase of the quirks
+ * We only use the proprietary veikk interface (usage 0xFF0A), since this emits
+ * nicer events than the other interfaces and we don't have to worry about
+ * the inconsistent grouping of events under different interfaces. In earlier
+ * versions of the driver (v1.0-2.0), we used the generic interfaces, but this
+ * caused many issues with button mapping and inconsistencies between
+ * interfaces. The Windows/Mac drivers also use the proprietary interface only.
  */
-static enum veikk_hid_type veikk_identify_device(struct hid_device *hid_dev)
+static int veikk_is_proprietary(struct hid_device *hid_dev)
 {
 	// dev_rdesc and dev_rsize are the device report descriptor and its
 	// length, respectively
 	u8 *rdesc = hid_dev->dev_rdesc;
 	unsigned int rsize = hid_dev->dev_rsize, i;
 
-	#ifdef VEIKK_DEBUG_MODE
-	// print out device report descriptor
-	hid_info(hid_dev, "DEV RDESC (len %d)", rsize);
-	for (i = 0; i < rsize; i++)
-		printk(KERN_CONT "%x ", rdesc[i]);
-	printk(KERN_INFO "");
-	#endif	// VEIKK_DEBUG_MODE
-
-	// just to be safe
-	if (rsize < 3)
-		return VEIKK_UNKNOWN;
-	
-	// check if proprietary; always begins with the byte sequence
-	// 0x06 0x0A 0xFF
-	if (rdesc[0] == 0x06 && rdesc[1] == 0x0A && rdesc[2] == 0xFF)
-		return VEIKK_PROPRIETARY;
-
-	// check if keyboard; always has the byte sequence 0x05 0x01 0x09 0x06
-	// TODO: possibly misidentifications on untested devices, am not sure
-	for (i = 0; i < rsize-4; i++)
-		if (rdesc[i] == 0x05 && rdesc[i+1] == 0x01
-				&& rdesc[i+2] == 0x09 && rdesc[i+3] == 0x06)
-			return VEIKK_KEYBOARD;
-
-	// default case is digitizer
-	// TODO: put some stricter check on this to protect against
-	// possible misidentifications?
-	return VEIKK_PEN;
+	return rsize >= 3 && rdesc[0] == 0x06 && rdesc[1] == 0x0A
+			&& rdesc[2] == 0xFF;
 }
 
 static int veikk_pen_event(struct veikk_pen_report *evt,
@@ -393,21 +347,21 @@ static int veikk_register_input(struct hid_device *hid_dev)
 	int err;
 
 	// setup appropriate input capabilities
-	if (veikk_dev->type == VEIKK_PROPRIETARY) {
+	//if (veikk_dev->type == VEIKK_PROPRIETARY) {
 		pen_input = veikk_dev->pen_input;
 		if ((err = veikk_register_pen_input(pen_input, model)))
 			return err;
-	}
-	if (veikk_dev->type == VEIKK_PROPRIETARY) {
+	//}
+	//if (veikk_dev->type == VEIKK_PROPRIETARY) {
 	//} else if (veikk_dev->model->pusage_keycode_map != veikk_no_btns
 	//		&& veikk_dev->type == VEIKK_KEYBOARD) {
 		keyboard_input = veikk_dev->keyboard_input;
 		if ((err = veikk_register_keyboard_input(keyboard_input, model)))
 			return err;
-	} else {
+	/*} else {
 		// for S640, since it has no keyboard input
 		return 0;
-	}
+	}*/
 
 	// common registration for pen and keyboard
 	pen_input->open = veikk_input_open;
@@ -437,23 +391,77 @@ static int veikk_register_input(struct hid_device *hid_dev)
 	return input_register_device(keyboard_input);
 }
 
-void veikkinit(struct work_struct *work)
-{
+/*
+ * This sends the magic bytes to the VEIKK tablets that enable the proprietary
+ * interfaces for the pen, keyboard, and gesture pad. It seems that sending
+ * them in two short of a time interval doesn't enable them all, so these
+ * are sent out using delayed workqueue tasks with different delays.
+ * 
+ * Device types: 0 = pen, 1 = keyboard, 2 = gesture pad
+ */
+static const u8 pen_output_report[9] =
+		{ 0x09, 0x01, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+static const u8 keyboard_output_report[9] = 
+		{ 0x09, 0x02, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+static const u8 gesture_pad_output_report[9] = 
+		{ 0x09, 0x03, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+int veikk_setup_feature(struct work_struct *work, int device_type) {
 	struct delayed_work *dwork;
 	struct veikk_device *veikk_dev;
+	struct hid_device *hid_dev;
+	u8 *buf, *output_report;
+	int buf_len = sizeof(pen_output_report);
 
 	dwork = container_of(work, struct delayed_work, work);
-	veikk_dev = container_of(dwork, struct veikk_device, setup_work);
 
-	hid_info(veikk_dev->hid_dev, "IN VEIKKINIT");
-	u8 buf3[9] = { 0x09, 0x03, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
-	u8 *b3 = devm_kzalloc(&veikk_dev->hid_dev->dev, 9, GFP_KERNEL);
-	memcpy(b3, buf3, 9);
-	veikk_dev->hid_dev->ll_driver->output_report(veikk_dev->hid_dev, b3, 9);
-	hid_info(veikk_dev->hid_dev, "END IN VEIKKINIT");
+	switch (device_type) {
+	case 0:
+		veikk_dev = container_of(dwork, struct veikk_device,
+				setup_pen_work);
+		output_report = pen_output_report;
+		break;
+	case 1:
+		veikk_dev = container_of(dwork, struct veikk_device,
+				setup_keyboard_work);
+		output_report = keyboard_output_report;
+		break;
+	case 2:
+		veikk_dev = container_of(dwork, struct veikk_device,
+				setup_gesture_pad_work);
+		output_report = gesture_pad_output_report;
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	hid_dev = veikk_dev->hid_dev;
+	if (!(buf = devm_kzalloc(&hid_dev->dev, buf_len, GFP_KERNEL))) {
+		return -ENOMEM;
+	}
+
+	memcpy(buf, output_report, buf_len);
+	hid_dev->ll_driver->output_report(hid_dev, buf, buf_len);
+	return 0;
+}
+void veikk_setup_pen(struct work_struct *work)
+{
+	veikk_setup_feature(work, 0);
+}
+void veikk_setup_keyboard(struct work_struct *work)
+{
+	veikk_setup_feature(work, 1);
+}
+void veikk_setup_gesture_pad(struct work_struct *work)
+{
+	veikk_setup_feature(work, 2);
 }
 
-void veikkinit2(struct work_struct *work)
+// TODO: remove these
+/*
+ * this sends the magic bytes to the tablet that enables the proprietary
+ * interface for the keyboard input
+ */
+/*void veikk_setup_keyboard(struct work_struct *work)
 {
 	struct delayed_work *dwork;
 	struct veikk_device *veikk_dev;
@@ -469,6 +477,10 @@ void veikkinit2(struct work_struct *work)
 	hid_info(veikk_dev->hid_dev, "END IN VEIKKINIT2");
 }
 
+void veikkinit2(struct work_struct *work)
+{
+}*/
+
 // new device inserted
 static int veikk_probe(struct hid_device *hid_dev,
 		const struct hid_device_id *id)
@@ -477,122 +489,62 @@ static int veikk_probe(struct hid_device *hid_dev,
 	struct usb_device *usb_dev = interface_to_usbdev(usb_intf);
 	struct veikk_device *veikk_dev, *veikk_dev_it;
 	struct list_head *lh;
-	enum veikk_hid_type dev_type;
 	int err;
 
-	if ((dev_type = veikk_identify_device(hid_dev)) == VEIKK_UNKNOWN) {
-		hid_err(hid_dev, "could not identify veikk device hid type");
-		return dev_type;
-	}
-	
-	// proprietary device emits no events, ignore
-	//if (dev_type == VEIKK_PROPRIETARY)
-	//	return 0;
+	if (!veikk_is_proprietary(hid_dev))
+		return 0;
 
 	if (!id->driver_data) {
 		hid_err(hid_dev, "id->driver_data missing");
 		return -EINVAL;
 	}
 
-	// allocate veikk device
 	if (!(veikk_dev = devm_kzalloc(&hid_dev->dev,
 			sizeof(struct veikk_device), GFP_KERNEL))) {
-		hid_info(hid_dev, "allocating struct veikk_device");
+		hid_err(hid_dev, "error allocating veikk device descriptor");
 		return -ENOMEM;
 	}
 	
 	// configure struct veikk_device and set as hid device descriptor
 	veikk_dev->model = (struct veikk_model *) id->driver_data;
-	veikk_dev->usb_dev = usb_dev;
 	veikk_dev->hid_dev = hid_dev;
-	veikk_dev->type = dev_type;
 	hid_set_drvdata(hid_dev, veikk_dev);
 
-	if (dev_type != VEIKK_PROPRIETARY) {
-		return 0;
-	}
-
 	if ((err = hid_parse(hid_dev))) {
-		hid_info(hid_dev, "hid_parse");
+		hid_err(hid_dev, "hid_parse error");
 		return err;
 	}
 
 	// allocate struct input_devs
-	if (dev_type == VEIKK_PROPRIETARY && !(veikk_dev->pen_input =
+	if (!(veikk_dev->pen_input =
 			devm_input_allocate_device(&hid_dev->dev))) {
-		hid_info(hid_dev, "allocating digitizer input");
-		return -ENOMEM;
-	//} else if (dev_type == VEIKK_KEYBOARD && !(veikk_dev->keyboard_input =
-	//		devm_input_allocate_device(&hid_dev->dev))) {
-	//	hid_info(hid_dev, "allocating keyboard input");
-	//	return -ENOMEM;
-	}
-	if (dev_type == VEIKK_PROPRIETARY && !(veikk_dev->keyboard_input =
-			devm_input_allocate_device(&hid_dev->dev))) {
-		hid_info(hid_dev, "allocating keyboard input");
+		hid_err(hid_dev, "allocating digitizer input");
 		return -ENOMEM;
 	}
-
-	/*
-	 * veikk devices have multiple interfaces, which *may not correspond
-	 * to their functions* (e.g., one interface may have both keyboard and
-	 * pen functionalities, and the other none; or they may have one each);
-	 * thus, assign one struct input_dev to each. The one that is allocated
-	 * second will find the one that is allocated first and "share" their
-	 * struct input_devs so that they can emit the event on the correct
-	 * device, thus rectifying the interface mismatch
-
-	 * TODO: remove from llist if some other failure later in probe
-	 */
-	mutex_lock(&veikk_devs_mutex);
-	/*
-	 * walk the list, see if this is the first or the second struct
-	 * hid_device to be added to this list; if it is the second, (i.e.,
-	 * there is a struct hid_device with a matching usb_dev), set the
-	 * appropriate pointers to the other device's inputs and add it to the
-	 * linked list; else it is the first device, just add to list
-	 */
-	/*list_for_each(lh, &veikk_devs) {
-		veikk_dev_it = list_entry(lh, struct veikk_device, lh);
-
-		if (veikk_dev_it->usb_dev != veikk_dev->usb_dev)
-			continue;
-
-		if (dev_type == VEIKK_PEN) {
-			veikk_dev_it->pen_input = veikk_dev->pen_input;
-			veikk_dev->keyboard_input =
-					veikk_dev_it->keyboard_input;
-		} else {
-			veikk_dev->pen_input = veikk_dev_it->pen_input;
-			veikk_dev_it->keyboard_input =
-					veikk_dev->keyboard_input;
-		}
-		break;
+	if (!(veikk_dev->keyboard_input =
+			devm_input_allocate_device(&hid_dev->dev))) {
+		hid_err(hid_dev, "allocating keyboard input");
+		return -ENOMEM;
 	}
-	list_add(&veikk_dev->lh, &veikk_devs);
-*/
-	mutex_unlock(&veikk_devs_mutex);
+	// TODO: unwind, perform error handling
 
-	if (dev_type == VEIKK_PROPRIETARY) {
 	if ((err = veikk_register_input(hid_dev))) {
 		hid_err(hid_dev, "error registering inputs");
 		return err;
 	}
-	}
+	// TODO: unwind, unregister input devices
 
-	if (dev_type == VEIKK_PROPRIETARY) {
 	if ((err = hid_hw_start(hid_dev, HID_CONNECT_HIDRAW
 			| HID_CONNECT_DRIVER))) {
 		hid_err(hid_dev, "error signaling hardware start");
 		return err;
-	}
 	}
 
 	#ifdef VEIKK_DEBUG_MODE
 	hid_info(hid_dev, "%s probed successfully.", veikk_dev->model->name);
 	#endif	// VEIKK_DEBUG_MODE
 
-	hid_info(hid_dev, "WORKING HERE.");
+	/*hid_info(hid_dev, "WORKING HERE.");
 	u8 buf1[9] = { 0x09, 0x01, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 	u8 buf2[9] = { 0x09, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 	u8 buf3[9] = { 0x09, 0x03, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
@@ -602,51 +554,53 @@ static int veikk_probe(struct hid_device *hid_dev,
 	memcpy(b1, buf1, 9);
 	memcpy(b2, buf2, 9);
 	memcpy(b3, buf3, 9);
-	switch (dev_type) {
-	case VEIKK_PROPRIETARY:
-		hid_dev->ll_driver->output_report(hid_dev, b1, 9);
+	hid_dev->ll_driver->output_report(hid_dev, b1, 9);
 
-		INIT_DELAYED_WORK(&veikk_dev->setup_work2, veikkinit2);
-		schedule_delayed_work(&veikk_dev->setup_work2, 200);
-		//hid_dev->ll_driver->output_report(hid_dev, b2, 9);
-		//hid_dev->ll_driver->output_report(hid_dev, b3, 9);
+	INIT_DELAYED_WORK(&veikk_dev->setup_work2, veikkinit2);
+	schedule_delayed_work(&veikk_dev->setup_work2, 200);
+	//hid_dev->ll_driver->output_report(hid_dev, b2, 9);
+	//hid_dev->ll_driver->output_report(hid_dev, b3, 9);
 
-		//workqueue_t workqueue = *create_workqueue("veikkinit");
-		//DECLARE_DELAYED_WORK(setup_gesture_pad, veikkinit, hid_dev)
-		// timeout is arbitrary for now
-		// don't need dedicated workqueue, just use global one
-		// only for A50
-		//if (veikk_dev->model->prod_id == 0x0003) {
-			INIT_DELAYED_WORK(&veikk_dev->setup_work, veikkinit);
-			schedule_delayed_work(&veikk_dev->setup_work, 100);
-		//}
+	//workqueue_t workqueue = *create_workqueue("veikkinit");
+	//DECLARE_DELAYED_WORK(setup_gesture_pad, veikkinit, hid_dev)
+	// timeout is arbitrary for now
+	// don't need dedicated workqueue, just use global one
+	// only for A50
+	//if (veikk_dev->model->prod_id == 0x0003) {
+		INIT_DELAYED_WORK(&veikk_dev->setup_work, veikkinit);
+		schedule_delayed_work(&veikk_dev->setup_work, 100);
+	//}
 
-		// schedule_delayed_work(setup_gesture_pad, 100);
-		//queue_delayed_work(workqueue, setup_gesture_pad, 100);
-		break;
-	case VEIKK_KEYBOARD:
-		//hid_dev->ll_driver->output_report(hid_dev, b2, 9);
-		//hid_dev->ll_driver->output_report(hid_dev, b3, 9);
-		break;
-	default:
-		break;
-	}
-	hid_info(hid_dev, "END WORKING HERE.");
+	// schedule_delayed_work(setup_gesture_pad, 100);
+	//queue_delayed_work(workqueue, setup_gesture_pad, 100);
+	hid_info(hid_dev, "END WORKING HERE.");*/
+
+	// TODO: only if device requires it
+	INIT_DELAYED_WORK(&veikk_dev->setup_pen_work, veikk_setup_pen);
+	INIT_DELAYED_WORK(&veikk_dev->setup_keyboard_work,
+			veikk_setup_keyboard);
+	INIT_DELAYED_WORK(&veikk_dev->setup_gesture_pad_work,
+			veikk_setup_gesture_pad);
+
+	schedule_delayed_work(&veikk_dev->setup_pen_work, 100);
+	schedule_delayed_work(&veikk_dev->setup_keyboard_work, 100);
+	schedule_delayed_work(&veikk_dev->setup_gesture_pad_work, 100);
 	return 0;
 }
 
 // TODO: be more careful with resources if unallocated
 static void veikk_remove(struct hid_device *hid_dev) {
-	struct veikk_device *veikk_dev = hid_get_drvdata(hid_dev);
+	struct veikk_device *veikk_dev;
+
+	// didn't set up the generic devices, so don't need to clean them up
+	if (!veikk_is_proprietary(hid_dev))
+		return;
+
+	veikk_dev = hid_get_drvdata(hid_dev);
 
 	if (veikk_dev) {
-		mutex_lock(&veikk_devs_mutex);
-		//list_del(&veikk_dev->lh);
-		mutex_unlock(&veikk_devs_mutex);
 
-		if (veikk_dev->type == VEIKK_PROPRIETARY) {
 		hid_hw_stop(hid_dev);
-		}
 	}
 
 	#ifdef VEIKK_DEBUG_MODE
