@@ -389,18 +389,20 @@ static int veikk_register_input(struct hid_device *hid_dev)
 {
 	struct veikk_device *veikk_dev = hid_get_drvdata(hid_dev);
 	const struct veikk_model *model = veikk_dev->model;
-	struct input_dev *input;
+	struct input_dev *pen_input, *keyboard_input;
 	int err;
 
 	// setup appropriate input capabilities
 	if (veikk_dev->type == VEIKK_PROPRIETARY) {
-		input = veikk_dev->pen_input;
-		if ((err = veikk_register_pen_input(input, model)))
+		pen_input = veikk_dev->pen_input;
+		if ((err = veikk_register_pen_input(pen_input, model)))
 			return err;
-	} else if (veikk_dev->model->pusage_keycode_map != veikk_no_btns
-			&& veikk_dev->type == VEIKK_KEYBOARD) {
-		input = veikk_dev->keyboard_input;
-		if ((err = veikk_register_keyboard_input(input, model)))
+	}
+	if (veikk_dev->type == VEIKK_PROPRIETARY) {
+	//} else if (veikk_dev->model->pusage_keycode_map != veikk_no_btns
+	//		&& veikk_dev->type == VEIKK_KEYBOARD) {
+		keyboard_input = veikk_dev->keyboard_input;
+		if ((err = veikk_register_keyboard_input(keyboard_input, model)))
 			return err;
 	} else {
 		// for S640, since it has no keyboard input
@@ -408,19 +410,31 @@ static int veikk_register_input(struct hid_device *hid_dev)
 	}
 
 	// common registration for pen and keyboard
-	input->open = veikk_input_open;
-	input->close = veikk_input_close;
-	input->phys = hid_dev->phys;
-	input->uniq = hid_dev->uniq;
-	input->id.bustype = hid_dev->bus;
-	input->id.vendor = hid_dev->vendor;
-	input->id.product = hid_dev->product;
-	input->id.version = hid_dev->version;
+	pen_input->open = veikk_input_open;
+	pen_input->close = veikk_input_close;
+	pen_input->phys = hid_dev->phys;
+	pen_input->uniq = hid_dev->uniq;
+	pen_input->id.bustype = hid_dev->bus;
+	pen_input->id.vendor = hid_dev->vendor;
+	pen_input->id.product = hid_dev->product;
+	pen_input->id.version = hid_dev->version;
+
+	keyboard_input->open = veikk_input_open;
+	keyboard_input->close = veikk_input_close;
+	keyboard_input->phys = hid_dev->phys;
+	keyboard_input->uniq = hid_dev->uniq;
+	keyboard_input->id.bustype = hid_dev->bus;
+	keyboard_input->id.vendor = hid_dev->vendor;
+	keyboard_input->id.product = hid_dev->product;
+	keyboard_input->id.version = hid_dev->version;
 
 	// needed for veikk_input_open/veikk_input_close
-	input_set_drvdata(input, hid_dev);
+	input_set_drvdata(pen_input, hid_dev);
 
-	return input_register_device(input);
+	input_set_drvdata(keyboard_input, hid_dev);
+
+	input_register_device(pen_input);
+	return input_register_device(keyboard_input);
 }
 
 void veikkinit(struct work_struct *work)
@@ -512,6 +526,11 @@ static int veikk_probe(struct hid_device *hid_dev,
 	//		devm_input_allocate_device(&hid_dev->dev))) {
 	//	hid_info(hid_dev, "allocating keyboard input");
 	//	return -ENOMEM;
+	}
+	if (dev_type == VEIKK_PROPRIETARY && !(veikk_dev->keyboard_input =
+			devm_input_allocate_device(&hid_dev->dev))) {
+		hid_info(hid_dev, "allocating keyboard input");
+		return -ENOMEM;
 	}
 
 	/*
