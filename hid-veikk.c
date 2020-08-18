@@ -56,6 +56,17 @@ struct veikk_pen_report_data {
 	u8 btns;
 	u8 x[2], y[2], pressure[2];
 };
+struct veikk_buttons_report_data {
+	u8 unused;	// not sure what this byte is for
+	u8 pressed;
+	u8 btns[2];	// last 5 bytes are a bitmap of keys pressed; no tablet
+	u8 unused2[3];	// has more than 12 buttons (only need 2 bytes)
+};
+struct veikk_pad_report_data {
+	u8 pressed;
+	u8 btns;	// last 6 bytes are a bitmap of keys pressed; no
+	u8 unused[5];	// gesture pad has more than 8 keys (only need 1 byte)
+};
 
 // veikk model characteristics
 struct veikk_model {
@@ -77,14 +88,14 @@ struct veikk_device {
 	struct delayed_work setup_pen_work, setup_buttons_work,
 			setup_pad_work;
 	struct hid_device *hid_dev;
+
+	// bitmaps holding the latest state of buttons (simplifies event
+	// handlers and allows for hardrepeat emulation for the gesture pad)
+	u16 buttons_state;
+	u8 pad_state;
 };
 
-// circular llist of struct veikk_devices
-struct list_head veikk_devs;
-struct mutex veikk_devs_mutex;
-LIST_HEAD(veikk_devs);
-DEFINE_MUTEX(veikk_devs_mutex);
-
+// TODO: remove these
 // See BUTTON_MAPPING.txt for an in-depth explanation of button mapping
 #define VK_BTN_0		KEY_KP0
 #define	VK_BTN_1		KEY_KP1
@@ -177,9 +188,9 @@ static int veikk_is_proprietary(struct hid_device *hid_dev)
 static const u8 pen_output_report[9] =
 		{ 0x09, 0x01, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 static const u8 buttons_output_report[9] = 
-		{ 0x09, 0x02, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+		{ 0x09, 0x02, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 static const u8 pad_output_report[9] = 
-		{ 0x09, 0x03, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+		{ 0x09, 0x03, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 static int veikk_setup_feature(struct work_struct *work, int device_type) {
 	struct delayed_work *dwork;
 	struct veikk_device *veikk_dev;
@@ -232,8 +243,11 @@ static void veikk_setup_pad(struct work_struct *work)
 }
 
 static int veikk_pen_event(struct veikk_pen_report_data *evt,
-		struct input_dev *input)
+		struct hid_device *hid_dev)
 {
+	struct veikk_device *veikk_dev = hid_get_drvdata(hid_dev);
+	struct input_dev *input = veikk_dev->pen_input;
+
 	input_report_abs(input, ABS_X, get_unaligned_le16(evt->x));
 	input_report_abs(input, ABS_Y, get_unaligned_le16(evt->y));
 	input_report_abs(input, ABS_PRESSURE,
@@ -245,20 +259,77 @@ static int veikk_pen_event(struct veikk_pen_report_data *evt,
 	return 0;
 }
 
-/*static int veikk_pen_event(struct veikk_pen_report *evt,
-		struct input_dev *input)
+static int veikk_buttons_event(struct veikk_buttons_report_data *evt,
+		struct hid_device *hid_dev)
 {
-	input_report_abs(input, ABS_X, evt->x);
-	input_report_abs(input, ABS_Y, evt->y);
-	input_report_abs(input, ABS_PRESSURE, evt->pressure);
+	struct veikk_device *veikk_dev = hid_get_drvdata(hid_dev);
+	struct input_dev *input = veikk_dev->buttons_input;
+	u16 event_buttons = get_unaligned_le16(evt->btns), state;
 
-	input_report_key(input, BTN_TOUCH, evt->btns & 0x01);
-	input_report_key(input, BTN_STYLUS, evt->btns & 0x02);
-	input_report_key(input, BTN_STYLUS2, evt->btns & 0x04);
+	// if key pressed, set button bit; else unset it
+	state = evt->pressed
+			? (veikk_dev->buttons_state |= event_buttons)
+			: (veikk_dev->buttons_state &= ~event_buttons);
+
+	input_report_key(input, KEY_A, state & 0x001);
+	input_report_key(input, KEY_B, state & 0x002);
+	input_report_key(input, KEY_C, state & 0x004);
+	input_report_key(input, KEY_D, state & 0x008);
+	input_report_key(input, KEY_E, state & 0x010);
+	input_report_key(input, KEY_F, state & 0x020);
+	input_report_key(input, KEY_G, state & 0x040);
+	input_report_key(input, KEY_H, state & 0x080);
+	input_report_key(input, KEY_I, state & 0x100);
+	input_report_key(input, KEY_J, state & 0x200);
 	return 0;
-}*/
+}
 
-static int veikk_buttons_event(struct veikk_buttons_report *evt,
+static int veikk_pad_event(struct veikk_pad_report_data *evt,
+		struct hid_device *hid_dev)
+{
+	struct veikk_device *veikk_dev = hid_get_drvdata(hid_dev);
+	struct input_dev *input = veikk_dev->pad_input;
+	u8 state;
+
+	state = evt->pressed
+			? (veikk_dev->pad_state |= evt->btns)
+			: (veikk_dev->pad_state &= ~evt->btns);
+
+	input_report_key(input, KEY_A, state & 0x01);
+	input_report_key(input, KEY_B, state & 0x02);
+	input_report_key(input, KEY_C, state & 0x04);
+	input_report_key(input, KEY_D, state & 0x08);
+	input_report_key(input, KEY_E, state & 0x10);
+
+	/*switch (evt->btns) {
+	// swipe up
+	case 0x01:
+		key = KEY_A;
+		break;
+	// swipe down
+	case 0x02:
+		key = KEY_B;
+		break;
+	// swipe left
+	case 0x04:
+		key = KEY_C;
+		break;
+	// swipe right
+	case 0x08:
+		key = KEY_D;
+		break;
+	// double-tap (A50)
+	case 0x10:
+		key = KEY_E;
+		break;
+	default:
+		return -EINVAL;
+	}
+	input_report_key(input, key, evt->pressed);*/
+	return 0;
+}
+
+/*static int veikk_buttons_event(struct veikk_buttons_report *evt,
 		struct input_dev *input, const int *pusage_keycode_map)
 {
 	u8 pusages[VEIKK_BTN_COUNT] = { 0 }, i, keys_pressed;
@@ -303,7 +374,7 @@ static int veikk_buttons_event(struct veikk_buttons_report *evt,
 		input_report_key(input, pusage_key_map[i], pusages[i]);
 	}
 	return 0;
-}
+}*/
 
 static int veikk_raw_event(struct hid_device *hid_dev,
 		struct hid_report *report, u8 *data, int size)
@@ -325,68 +396,29 @@ static int veikk_raw_event(struct hid_device *hid_dev,
 
 	switch (veikk_report->type) {
 	case VEIKK_PEN_REPORT:
-		hid_info(hid_dev, "PEN REPORT");
 		input = veikk_dev->pen_input;
-
-		hid_info(hid_dev, "%2x %2x %2x %2x %2x %2x %2x ",
-			veikk_report->data[0], veikk_report->data[1], veikk_report->data[2], veikk_report->data[3],
-			veikk_report->data[4], veikk_report->data[5], veikk_report->data[6]);
-
 		if (veikk_pen_event((struct veikk_pen_report_data *)
-				veikk_report->data, input))
+				veikk_report->data, hid_dev))
 			return -EINVAL;
-		input_sync(input);
-		return 1;
 		break;
-
 	case VEIKK_BUTTON_REPORT:
-		hid_info(hid_dev, "BUTTON REPORT");
-		return 0;
-		break;
-
-	case VEIKK_PAD_REPORT:
-		hid_info(hid_dev, "PAD REPORT");
-		return 0;
-		break;
-	/*case VEIKK_PEN_REPORT:
-	case VEIKK_STYLUS_REPORT:
-		if (size != sizeof(struct veikk_pen_report))
-			return -EINVAL;
-
-		input = veikk_dev->pen_input;
-		if (!input) {
-			printk("TESTING 1 2 3");
-			return -1;
-		}
-
-		if ((err = veikk_pen_event((struct veikk_pen_report *) data,
-					input)))
-			return err;
-		break;
-	case VEIKK_KEYBOARD_REPORT:
-		if (size != sizeof(struct veikk_buttons_report))
-			return -EINVAL;
-
-		#ifdef VEIKK_DEBUG_MODE
-		hid_info(hid_dev, "%2x %2x %2x %2x %2x %2x %2x %2x ",
-			data[0], data[1], data[2], data[3],
-			data[4], data[5], data[6], data[7]);
-		#endif	// VEIKK_DEBUG_MODE
-
 		input = veikk_dev->buttons_input;
-		if (!input) {
-			printk("TESTING 1 2 5");
-			return -1;
-		}
-		if ((err = veikk_buttons_event(
-				(struct veikk_buttons_report *) data, input,
-				veikk_dev->model->pusage_keycode_map)))
-			return err;
-		break;*/
+		if (veikk_buttons_event((struct veikk_buttons_report_data *)
+				veikk_report->data, hid_dev))
+			return -EINVAL;
+		break;
+	case VEIKK_PAD_REPORT:
+		input = veikk_dev->pad_input;
+		if (veikk_pad_event((struct veikk_pad_report_data *)
+				veikk_report->data, hid_dev))
+			return -EINVAL;
+		break;
 	default:
 		hid_info(hid_dev, "unknown report with id %d", report->id);
 		return 0;
 	}
+
+	// TODO: emulate hardrepeat for keypad
 
 	// emit EV_SYN on successful event emission
 	input_sync(input);
@@ -458,19 +490,30 @@ static int veikk_setup_buttons_input(struct input_dev *input,
 	__set_bit(EV_REP, input->evbit);
 	__set_bit(MSC_SCAN, input->mscbit);
 
+	// TODO: set correct keybits
+	__set_bit(KEY_A, input->keybit);
+	__set_bit(KEY_B, input->keybit);
+	__set_bit(KEY_C, input->keybit);
+	__set_bit(KEY_D, input->keybit);
+	__set_bit(KEY_E, input->keybit);
+	__set_bit(KEY_F, input->keybit);
+	__set_bit(KEY_G, input->keybit);
+	__set_bit(KEY_H, input->keybit);
+
 	// modifiers; sent out both by default and regular map
-	__set_bit(KEY_LEFTCTRL, input->keybit);
-	__set_bit(KEY_LEFTALT, input->keybit);
-	__set_bit(KEY_LEFTSHIFT, input->keybit);
+	//__set_bit(KEY_LEFTCTRL, input->keybit);
+	//__set_bit(KEY_LEFTALT, input->keybit);
+	//__set_bit(KEY_LEFTSHIFT, input->keybit);
 
 	// possible keys sent out by regular map
-	for (i = 0; i < VEIKK_BTN_COUNT; ++i)
-		__set_bit(model->pusage_keycode_map[i], input->keybit);
+	//for (i = 0; i < VEIKK_BTN_COUNT; ++i)
+	//	__set_bit(model->pusage_keycode_map[i], input->keybit);
 
 	// possible keys sent out by default map
-	for (i = 0; i < VEIKK_BTN_COUNT; ++i)
-		__set_bit(dfl_pusage_key_map[i], input->keybit);
+	//for (i = 0; i < VEIKK_BTN_COUNT; ++i)
+	//	__set_bit(dfl_pusage_key_map[i], input->keybit);
 
+	//input_enable_softrepeat(input, 100, 33);
 	input_enable_softrepeat(input, 100, 33);
 	return 0;
 }
@@ -490,6 +533,22 @@ static int veikk_setup_pad_input(struct input_dev *input,
 		return -ENOMEM;
 	sprintf(input_name, "%s Gesture Pad", model->name);
 	input->name = input_name;
+
+	__set_bit(EV_KEY, input->evbit);
+	__set_bit(EV_MSC, input->evbit);
+	__set_bit(EV_REP, input->evbit);
+	__set_bit(MSC_SCAN, input->mscbit);
+
+	// TODO: adjust these keys
+	__set_bit(KEY_A, input->keybit);
+	__set_bit(KEY_B, input->keybit);
+	__set_bit(KEY_C, input->keybit);
+	__set_bit(KEY_D, input->keybit);
+	__set_bit(KEY_E, input->keybit);
+
+	// TODO: probably want to adjust this, since preferences for scroll
+	// repeat are probably different than those for others
+	input_enable_softrepeat(input, 50, 10);
 	return 0;
 }
 
