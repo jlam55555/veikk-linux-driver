@@ -13,6 +13,7 @@
 #include <linux/hid.h>
 #include <linux/module.h>
 #include <linux/workqueue.h>
+#include <asm/unaligned.h>
 
 // comment the following line to disable debugging output in kernel log (dmesg)
 #define VEIKK_DEBUG_MODE
@@ -47,8 +48,13 @@ struct veikk_buttons_report {
 #define VEIKK_PAD_REPORT	0x43
 struct veikk_report {
 	u8 id;		// proprietary report id always is 9
-	u8 type;	// see above macros
-	u8 data[7];	// arbitrary data
+	u8 type;	// see above macros for report types
+	u8 data[7];	// data depends on the type
+};
+
+struct veikk_pen_report_data {
+	u8 btns;
+	u8 x[2], y[2], pressure[2];
 };
 
 // veikk model characteristics
@@ -225,7 +231,21 @@ static void veikk_setup_pad(struct work_struct *work)
 	veikk_setup_feature(work, 2);
 }
 
-static int veikk_pen_event(struct veikk_pen_report *evt,
+static int veikk_pen_event(struct veikk_pen_report_data *evt,
+		struct input_dev *input)
+{
+	input_report_abs(input, ABS_X, get_unaligned_le16(evt->x));
+	input_report_abs(input, ABS_Y, get_unaligned_le16(evt->y));
+	input_report_abs(input, ABS_PRESSURE,
+			get_unaligned_le16(evt->pressure));
+
+	input_report_key(input, BTN_TOUCH, evt->btns & 0x01);
+	input_report_key(input, BTN_STYLUS, evt->btns & 0x02);
+	input_report_key(input, BTN_STYLUS2, evt->btns & 0x04);
+	return 0;
+}
+
+/*static int veikk_pen_event(struct veikk_pen_report *evt,
 		struct input_dev *input)
 {
 	input_report_abs(input, ABS_X, evt->x);
@@ -236,7 +256,7 @@ static int veikk_pen_event(struct veikk_pen_report *evt,
 	input_report_key(input, BTN_STYLUS, evt->btns & 0x02);
 	input_report_key(input, BTN_STYLUS2, evt->btns & 0x04);
 	return 0;
-}
+}*/
 
 static int veikk_buttons_event(struct veikk_buttons_report *evt,
 		struct input_dev *input, const int *pusage_keycode_map)
@@ -306,7 +326,17 @@ static int veikk_raw_event(struct hid_device *hid_dev,
 	switch (veikk_report->type) {
 	case VEIKK_PEN_REPORT:
 		hid_info(hid_dev, "PEN REPORT");
-		return 0;
+		input = veikk_dev->pen_input;
+
+		hid_info(hid_dev, "%2x %2x %2x %2x %2x %2x %2x ",
+			veikk_report->data[0], veikk_report->data[1], veikk_report->data[2], veikk_report->data[3],
+			veikk_report->data[4], veikk_report->data[5], veikk_report->data[6]);
+
+		if (veikk_pen_event((struct veikk_pen_report_data *)
+				veikk_report->data, input))
+			return -EINVAL;
+		input_sync(input);
+		return 1;
 		break;
 
 	case VEIKK_BUTTON_REPORT:
