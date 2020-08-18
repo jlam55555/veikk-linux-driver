@@ -1,24 +1,26 @@
 /*
- * Linux driver for VEIKK digitizers, v3.0.0
- * S640, A30, A50, A15, A15 Pro, VK1560 tested on GIMP, Krita, kernels 4.18+
- * GitHub: https://www.github.com/jlam55555/veikk-linux-driver
- * See GitHub for descriptions of VEIKK device quirks, setup information, and
- * 		detailed testing environments/data
+ * Linux driver for VEIKK digitizers, v3.0.0-alpha
+ *
+ * Tested on:
+ * Devices:		S640, A30, A50, A15, A15 Pro, VK1560
+ * Software: 		GIMP (versions?), Krita (versions?)
+ * Linux kernels:	4.18+ (note: older kernels have issues)
+ *
+ * GitHub: 		https://www.github.com/jlam55555/veikk-linux-driver
+ * Author: 		Jonathan Lam <jonlamdev@gmail.com>
  */
 
 #include <linux/hid.h>
 #include <linux/module.h>
-#include <linux/types.h>
-#include <linux/usb.h>
 #include <linux/workqueue.h>
 
 // comment the following line to disable debugging output in kernel log (dmesg)
-#define VEIKK_DEBUG_MODE	1
+#define VEIKK_DEBUG_MODE
 
 #define VEIKK_VENDOR_ID		0x2FEB
 #define VEIKK_DRIVER_VERSION	"3.0.0"
 #define VEIKK_DRIVER_DESC	"VEIKK digitizer driver"
-#define VEIKK_DRIVER_AUTHOR	"Jonathan Lam <jlam55555@gmail.com>"
+#define VEIKK_DRIVER_AUTHOR	"Jonathan Lam <jonlamdev@gmail.com>"
 #define VEIKK_DRIVER_LICENSE	"GPL"
 
 // TODO: update/remove these
