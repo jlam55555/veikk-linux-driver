@@ -57,7 +57,7 @@ struct veikk_pen_report_data {
 	u8 x[2], y[2], pressure[2];
 };
 struct veikk_buttons_report_data {
-	u8 unused;	// not sure what this byte is for
+	u8 type;	// distinguishes between buttons and wheel
 	u8 pressed;
 	u8 btns[2];	// last 5 bytes are a bitmap of keys pressed; no tablet
 	u8 unused2[3];	// has more than 12 buttons (only need 2 bytes)
@@ -78,6 +78,8 @@ struct veikk_model {
 	const int *pusage_keycode_map;
 
 	// .has_pad = whether model has a gesture pad, e.g., on A30, A50
+	// note that the wheels (e.g., on VK1560, A15 Pro) count as buttons
+	// and are not a gesture pad (they share the buttons report type)
 	const int has_buttons, has_pad;
 };
 
@@ -92,7 +94,7 @@ struct veikk_device {
 	// bitmaps holding the latest state of buttons
 	// (simplifies event handlers)
 	u16 buttons_state;
-	u8 pad_state;
+	u8 pad_state, wheel_state;
 };
 
 // TODO: remove these
@@ -259,36 +261,59 @@ static int veikk_pen_event(struct veikk_pen_report_data *evt,
 	return 0;
 }
 
+/*
+ * Note that this handles both the buttons and the wheel-left and wheel-right
+ * events (but not the gesture pad events). These all are emitted from the
+ * tablet with the same veikk_report::type of 0x1002. The buttons have a
+ * veikk_buttons_report_data::type of 1, while the wheel events have a
+ * veikk_buttons_report_data::type of 3, so it is easier to handle them
+ * separately in this function and give them separate bitmaps.
+ */
 static int veikk_buttons_event(struct veikk_buttons_report_data *evt,
 		struct hid_device *hid_dev)
 {
 	struct veikk_device *veikk_dev = hid_get_drvdata(hid_dev);
 	struct input_dev *input = veikk_dev->buttons_input;
-	u16 event_buttons = get_unaligned_le16(evt->btns), state;
+	u16 event_buttons = get_unaligned_le16(evt->btns), buttons_state;
+	u8 wheel_state, any_keys_pressed;
 
-	// if key pressed, set button bit; else unset it
-	state = evt->pressed
-			? (veikk_dev->buttons_state |= event_buttons)
-			: (veikk_dev->buttons_state &= ~event_buttons);
+	// first byte: 1 = button, 3 = wheel left/right
+	if (evt->type == 1) {
+		buttons_state = evt->pressed
+				? (veikk_dev->buttons_state |= event_buttons)
+				: (veikk_dev->buttons_state &= ~event_buttons);
+		wheel_state = veikk_dev->wheel_state;
+	} else {
+		buttons_state = veikk_dev->buttons_state;
+		wheel_state = evt->pressed
+				? (veikk_dev->wheel_state |= event_buttons)
+				: (veikk_dev->wheel_state &= ~event_buttons);
+	}
+	any_keys_pressed = !!(buttons_state | wheel_state);
 
-	// emit modifiers if any key pressed
-	input_report_key(input, KEY_LEFTCTRL, !!state);
-	input_report_key(input, KEY_LEFTALT, !!state);
-	input_report_key(input, KEY_LEFTSHIFT, !!state);
-	input_report_key(input, KEY_LEFTMETA, !!state);
+	// emit modifiers if any key pressed; want to send modifier events
+	// before the keycodes so that they don't dispatch the normal actions
+	// of the keycodes
+	input_report_key(input, KEY_LEFTCTRL, !!any_keys_pressed);
+	input_report_key(input, KEY_LEFTALT, !!any_keys_pressed);
+	input_report_key(input, KEY_LEFTSHIFT, !!any_keys_pressed);
+	input_report_key(input, KEY_LEFTMETA, !!any_keys_pressed);
 
-	input_report_key(input, KEY_F1, state & 0x001);
-	input_report_key(input, KEY_F2, state & 0x002);
-	input_report_key(input, KEY_F3, state & 0x004);
-	input_report_key(input, KEY_F4, state & 0x008);
-	input_report_key(input, KEY_F5, state & 0x010);
-	input_report_key(input, KEY_F6, state & 0x020);
-	input_report_key(input, KEY_F7, state & 0x040);
-	input_report_key(input, KEY_F8, state & 0x080);
-	input_report_key(input, KEY_F9, state & 0x100);
-	input_report_key(input, KEY_F10, state & 0x200);
-	input_report_key(input, KEY_F11, state & 0x400);
-	input_report_key(input, KEY_F12, state & 0x800);
+	input_report_key(input, KEY_F1, buttons_state & 0x001);
+	input_report_key(input, KEY_F2, buttons_state & 0x002);
+	input_report_key(input, KEY_F3, buttons_state & 0x004);
+	input_report_key(input, KEY_F4, buttons_state & 0x008);
+	input_report_key(input, KEY_F5, buttons_state & 0x010);
+	input_report_key(input, KEY_F6, buttons_state & 0x020);
+	input_report_key(input, KEY_F7, buttons_state & 0x040);
+	input_report_key(input, KEY_F8, buttons_state & 0x080);
+	input_report_key(input, KEY_F9, buttons_state & 0x100);
+	input_report_key(input, KEY_F10, buttons_state & 0x200);
+	input_report_key(input, KEY_F11, buttons_state & 0x400);
+	input_report_key(input, KEY_F12, buttons_state & 0x800);
+
+	input_report_key(input, KEY_F13, wheel_state & 0x1);
+	input_report_key(input, KEY_F14, wheel_state & 0x2);
 	return 0;
 }
 
@@ -303,86 +328,23 @@ static int veikk_pad_event(struct veikk_pad_report_data *evt,
 			? (veikk_dev->pad_state |= evt->btns)
 			: (veikk_dev->pad_state &= ~evt->btns);
 
-	input_report_key(input, KEY_A, state & 0x01);
-	input_report_key(input, KEY_B, state & 0x02);
-	input_report_key(input, KEY_C, state & 0x04);
-	input_report_key(input, KEY_D, state & 0x08);
-	input_report_key(input, KEY_E, state & 0x10);
+	// emit modifiers if any key pressed
+	input_report_key(input, KEY_LEFTCTRL, !!state);
+	input_report_key(input, KEY_LEFTALT, !!state);
+	input_report_key(input, KEY_LEFTSHIFT, !!state);
+	input_report_key(input, KEY_LEFTMETA, !!state);
 
-	/*switch (evt->btns) {
-	// swipe up
-	case 0x01:
-		key = KEY_A;
-		break;
-	// swipe down
-	case 0x02:
-		key = KEY_B;
-		break;
-	// swipe left
-	case 0x04:
-		key = KEY_C;
-		break;
-	// swipe right
-	case 0x08:
-		key = KEY_D;
-		break;
-	// double-tap (A50)
-	case 0x10:
-		key = KEY_E;
-		break;
-	default:
-		return -EINVAL;
-	}
-	input_report_key(input, key, evt->pressed);*/
+	// gesture pad swipe up, down, left, right (respectively)
+	input_report_key(input, KEY_F21, state & 0x01);
+	input_report_key(input, KEY_F22, state & 0x02);
+	input_report_key(input, KEY_F23, state & 0x04);
+	input_report_key(input, KEY_F24, state & 0x08);
+
+	// double-tap
+	input_report_key(input, KEY_F20, state & 0x10);
+
 	return 0;
 }
-
-/*static int veikk_buttons_event(struct veikk_buttons_report *evt,
-		struct input_dev *input, const int *pusage_keycode_map)
-{
-	u8 pusages[VEIKK_BTN_COUNT] = { 0 }, i, keys_pressed;
-	s8 pusage;
-	const int *pusage_key_map;
-
-	// fill pseudo-usages map; this is independent of device
-	for (i = 0; i < 6 && evt->btns[i]; ++i) {
-		if ((pusage = usage_pusage_map[evt->btns[i]]) == -1)
-			return -EINVAL;
-		++pusages[pusage];
-	}
-
-	// if both Ctrl+V and V are pressed (A50)
-	if (pusages[3] && evt->ctrl_modifier) {
-		--pusages[3];
-		++pusages[5];
-	}
-
-	// if default mapping; also report ctrl
-	if (VEIKK_DFL_BTNS || pusage_keycode_map == veikk_no_btns) {
-		pusage_key_map = dfl_pusage_key_map;
-		input_report_key(input, KEY_LEFTCTRL, evt->ctrl_modifier);
-	} else {
-		pusage_key_map = pusage_keycode_map;
-		// if any keys pressed, add Ctrl+Alt+Shift modifiers
-		keys_pressed = !!evt->btns[0];
-		if (VK_MOD_CTRL)
-			input_report_key(input, KEY_LEFTCTRL, keys_pressed);
-		if (VK_MOD_ALT)
-			input_report_key(input, KEY_LEFTALT, keys_pressed);
-		if (VK_MOD_SHIFT)
-			input_report_key(input, KEY_LEFTSHIFT, keys_pressed);
-	}
-
-	for (i = 0; i < VEIKK_BTN_COUNT; i++) {
-		#ifdef VEIKK_DEBUG_MODE
-		hid_info((struct hid_device *) input_get_drvdata(input),
-				"KEY %d VALUE %d", pusage_key_map[i],
-				pusages[i]);
-		#endif	// VEIKK_DEBUG_MODE
-		input_report_key(input, pusage_key_map[i], pusages[i]);
-	}
-	return 0;
-}*/
 
 static int veikk_raw_event(struct hid_device *hid_dev,
 		struct hid_report *report, u8 *data, int size)
@@ -396,7 +358,7 @@ static int veikk_raw_event(struct hid_device *hid_dev,
 	hid_info(hid_dev, "raw report size: %d", size);
 	#endif	// VEIKK_DEBUG_MODE
 
-	// only supported report ID for proprietary device has ID 9
+	// only report ID for proprietary device has ID 9
 	if (report->id != 9 || size != sizeof(struct veikk_report))
 		return -EINVAL;
 
@@ -494,7 +456,7 @@ static int veikk_setup_buttons_input(struct input_dev *input,
 	__set_bit(EV_REP, input->evbit);
 	__set_bit(MSC_SCAN, input->mscbit);
 
-	// TODO: set correct keybits
+	// buttons 1-12
 	__set_bit(KEY_F1, input->keybit);
 	__set_bit(KEY_F2, input->keybit);
 	__set_bit(KEY_F3, input->keybit);
@@ -507,6 +469,12 @@ static int veikk_setup_buttons_input(struct input_dev *input,
 	__set_bit(KEY_F10, input->keybit);
 	__set_bit(KEY_F11, input->keybit);
 	__set_bit(KEY_F12, input->keybit);
+
+	// wheel center, left, right
+	// TODO: implement wheel center appropriately
+	__set_bit(KEY_F13, input->keybit);
+	__set_bit(KEY_F14, input->keybit);
+	__set_bit(KEY_F15, input->keybit);
 
 	// modifiers; sent out both by default and regular map
 	__set_bit(KEY_LEFTCTRL, input->keybit);
@@ -526,7 +494,6 @@ static int veikk_setup_buttons_input(struct input_dev *input,
 	return 0;
 }
 
-// TODO: working here
 static int veikk_setup_pad_input(struct input_dev *input,
 		struct hid_device *hid_dev)
 {
@@ -547,16 +514,13 @@ static int veikk_setup_pad_input(struct input_dev *input,
 	__set_bit(EV_REP, input->evbit);
 	__set_bit(MSC_SCAN, input->mscbit);
 
-	// TODO: adjust these keys
-	__set_bit(KEY_A, input->keybit);
-	__set_bit(KEY_B, input->keybit);
-	__set_bit(KEY_C, input->keybit);
-	__set_bit(KEY_D, input->keybit);
-	__set_bit(KEY_E, input->keybit);
+	// two-finger-tap, up, down, left, right
+	__set_bit(KEY_F20, input->keybit);
+	__set_bit(KEY_F21, input->keybit);
+	__set_bit(KEY_F22, input->keybit);
+	__set_bit(KEY_F23, input->keybit);
+	__set_bit(KEY_F24, input->keybit);
 
-	// TODO: probably want to adjust this, since preferences for scroll
-	// repeat are probably different than those for others
-	input_enable_softrepeat(input, 50, 10);
 	return 0;
 }
 
@@ -707,10 +671,8 @@ static void veikk_remove(struct hid_device *hid_dev) {
 
 	veikk_dev = hid_get_drvdata(hid_dev);
 
-	if (veikk_dev) {
-
+	if (veikk_dev)
 		hid_hw_stop(hid_dev);
-	}
 
 	#ifdef VEIKK_DEBUG_MODE
 	hid_info(hid_dev, "device removed successfully.");
