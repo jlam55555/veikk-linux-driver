@@ -89,8 +89,8 @@ struct veikk_device {
 			setup_pad_work;
 	struct hid_device *hid_dev;
 
-	// bitmaps holding the latest state of buttons (simplifies event
-	// handlers and allows for hardrepeat emulation for the gesture pad)
+	// bitmaps holding the latest state of buttons
+	// (simplifies event handlers)
 	u16 buttons_state;
 	u8 pad_state;
 };
@@ -271,16 +271,24 @@ static int veikk_buttons_event(struct veikk_buttons_report_data *evt,
 			? (veikk_dev->buttons_state |= event_buttons)
 			: (veikk_dev->buttons_state &= ~event_buttons);
 
-	input_report_key(input, KEY_A, state & 0x001);
-	input_report_key(input, KEY_B, state & 0x002);
-	input_report_key(input, KEY_C, state & 0x004);
-	input_report_key(input, KEY_D, state & 0x008);
-	input_report_key(input, KEY_E, state & 0x010);
-	input_report_key(input, KEY_F, state & 0x020);
-	input_report_key(input, KEY_G, state & 0x040);
-	input_report_key(input, KEY_H, state & 0x080);
-	input_report_key(input, KEY_I, state & 0x100);
-	input_report_key(input, KEY_J, state & 0x200);
+	// emit modifiers if any key pressed
+	input_report_key(input, KEY_LEFTCTRL, !!state);
+	input_report_key(input, KEY_LEFTALT, !!state);
+	input_report_key(input, KEY_LEFTSHIFT, !!state);
+	input_report_key(input, KEY_LEFTMETA, !!state);
+
+	input_report_key(input, KEY_F1, state & 0x001);
+	input_report_key(input, KEY_F2, state & 0x002);
+	input_report_key(input, KEY_F3, state & 0x004);
+	input_report_key(input, KEY_F4, state & 0x008);
+	input_report_key(input, KEY_F5, state & 0x010);
+	input_report_key(input, KEY_F6, state & 0x020);
+	input_report_key(input, KEY_F7, state & 0x040);
+	input_report_key(input, KEY_F8, state & 0x080);
+	input_report_key(input, KEY_F9, state & 0x100);
+	input_report_key(input, KEY_F10, state & 0x200);
+	input_report_key(input, KEY_F11, state & 0x400);
+	input_report_key(input, KEY_F12, state & 0x800);
 	return 0;
 }
 
@@ -417,10 +425,6 @@ static int veikk_raw_event(struct hid_device *hid_dev,
 		hid_info(hid_dev, "unknown report with id %d", report->id);
 		return 0;
 	}
-
-	// TODO: emulate hardrepeat for keypad
-
-	// emit EV_SYN on successful event emission
 	input_sync(input);
 	return 1;
 }
@@ -491,19 +495,24 @@ static int veikk_setup_buttons_input(struct input_dev *input,
 	__set_bit(MSC_SCAN, input->mscbit);
 
 	// TODO: set correct keybits
-	__set_bit(KEY_A, input->keybit);
-	__set_bit(KEY_B, input->keybit);
-	__set_bit(KEY_C, input->keybit);
-	__set_bit(KEY_D, input->keybit);
-	__set_bit(KEY_E, input->keybit);
-	__set_bit(KEY_F, input->keybit);
-	__set_bit(KEY_G, input->keybit);
-	__set_bit(KEY_H, input->keybit);
+	__set_bit(KEY_F1, input->keybit);
+	__set_bit(KEY_F2, input->keybit);
+	__set_bit(KEY_F3, input->keybit);
+	__set_bit(KEY_F4, input->keybit);
+	__set_bit(KEY_F5, input->keybit);
+	__set_bit(KEY_F6, input->keybit);
+	__set_bit(KEY_F7, input->keybit);
+	__set_bit(KEY_F8, input->keybit);
+	__set_bit(KEY_F9, input->keybit);
+	__set_bit(KEY_F10, input->keybit);
+	__set_bit(KEY_F11, input->keybit);
+	__set_bit(KEY_F12, input->keybit);
 
 	// modifiers; sent out both by default and regular map
-	//__set_bit(KEY_LEFTCTRL, input->keybit);
-	//__set_bit(KEY_LEFTALT, input->keybit);
-	//__set_bit(KEY_LEFTSHIFT, input->keybit);
+	__set_bit(KEY_LEFTCTRL, input->keybit);
+	__set_bit(KEY_LEFTALT, input->keybit);
+	__set_bit(KEY_LEFTSHIFT, input->keybit);
+	__set_bit(KEY_LEFTMETA, input->keybit);
 
 	// possible keys sent out by regular map
 	//for (i = 0; i < VEIKK_BTN_COUNT; ++i)
@@ -513,7 +522,6 @@ static int veikk_setup_buttons_input(struct input_dev *input,
 	//for (i = 0; i < VEIKK_BTN_COUNT; ++i)
 	//	__set_bit(dfl_pusage_key_map[i], input->keybit);
 
-	//input_enable_softrepeat(input, 100, 33);
 	input_enable_softrepeat(input, 100, 33);
 	return 0;
 }
