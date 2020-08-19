@@ -24,25 +24,6 @@
 #define VEIKK_DRIVER_AUTHOR	"Jonathan Lam <jonlamdev@gmail.com>"
 #define VEIKK_DRIVER_LICENSE	"GPL"
 
-// TODO: update/remove these
-/*
-#define VEIKK_PEN_REPORT	0x1
-#define VEIKK_STYLUS_REPORT	0x2
-#define VEIKK_KEYBOARD_REPORT	0x3
-*/
-
-// raw report structures
-// TODO: update/remove these
-struct veikk_pen_report {
-	u8 report_id;
-	u8 btns;
-	u16 x, y, pressure;
-};
-struct veikk_buttons_report {
-	u8 report_id, ctrl_modifier;
-	u8 btns[6];
-};
-
 #define VEIKK_PEN_REPORT	0x41
 #define VEIKK_BUTTON_REPORT	0x42
 #define VEIKK_PAD_REPORT	0x43
@@ -91,55 +72,12 @@ struct veikk_device {
 			setup_pad_work;
 	struct hid_device *hid_dev;
 
-	// bitmaps holding the latest state of buttons
-	// (simplifies event handlers)
+	// bitmaps holding the latest state of buttons; this is necessary
+	// for keeping the modifier keys down until all buttons are released
+	// (which is needed for proper softrepeats)
 	u16 buttons_state;
 	u8 pad_state, wheel_state;
 };
-
-// TODO: remove these
-// See BUTTON_MAPPING.txt for an in-depth explanation of button mapping
-#define VK_BTN_0		KEY_KP0
-#define	VK_BTN_1		KEY_KP1
-#define VK_BTN_2		KEY_KP2
-#define VK_BTN_3		KEY_KP3
-#define	VK_BTN_4		KEY_KP4
-#define VK_BTN_5		KEY_KP5
-#define VK_BTN_6		KEY_KP6
-#define VK_BTN_7		KEY_KP7
-#define VK_BTN_ENTER		KEY_ENTER
-#define VK_BTN_LEFT		KEY_KPLEFTPAREN
-#define VK_BTN_RIGHT		KEY_KPRIGHTPAREN
-#define VK_BTN_UP		KEY_KPPLUS
-#define VK_BTN_DOWN		KEY_KPMINUS
-
-#define VK_MOD_CTRL		1
-#define VK_MOD_SHIFT		1
-#define VK_MOD_ALT		1
-
-// don't change this unless a new scancode has been found
-#define VEIKK_BTN_COUNT		13
-
-// 1 for default mode, 0 for regular mode
-// TODO: turn this into a sysfs parameter; macro used just for simplicity
-#define VEIKK_DFL_BTNS		0
-
-static const s8 usage_pusage_map[64] = {
-//	  0   1   2   3   4   5   6   7   8   9   a   b   c   d   e   f
-	 -1, -1, -1, -1, -1, -1,  4, -1, -1, -1, -1, -1,  1, -1, -1, -1, // 0
-	 -1, -1, -1, -1, -1, -1,  7, -1, -1,  3, -1, -1, -1,  6, -1, -1, // 1
-	 -1, -1, -1, -1, -1, -1, -1, -1,  8, -1, -1, -1,  2,  9, 10, 11, // 2
-	 12, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,  0, -1, // 3
-};
-
-// default map (control modifier will be placed separately)
-static const int dfl_pusage_key_map[VEIKK_BTN_COUNT] = {
-	KEY_F5, KEY_I, KEY_SPACE, KEY_V, KEY_C, KEY_V, KEY_Z, KEY_S,
-	KEY_ENTER, KEY_MINUS, KEY_EQUAL, KEY_LEFTBRACE, KEY_RIGHTBRACE
-};
-
-// use this map as a symbol for the device having no buttons (e.g., for S640)
-static const int veikk_no_btns[VEIKK_BTN_COUNT];
 
 // veikk_event and veikk_report are only used for debugging
 #ifdef VEIKK_DEBUG_MODE
@@ -168,7 +106,7 @@ static int veikk_is_proprietary(struct hid_device *hid_dev)
 	// dev_rdesc and dev_rsize are the device report descriptor and its
 	// length, respectively
 	u8 *rdesc = hid_dev->dev_rdesc;
-	unsigned int rsize = hid_dev->dev_rsize, i;
+	unsigned int rsize = hid_dev->dev_rsize;
 
 	return rsize >= 3 && rdesc[0] == 0x06 && rdesc[1] == 0x0A
 			&& rdesc[2] == 0xFF;
@@ -197,7 +135,8 @@ static int veikk_setup_feature(struct work_struct *work, int device_type) {
 	struct delayed_work *dwork;
 	struct veikk_device *veikk_dev;
 	struct hid_device *hid_dev;
-	u8 *buf, *output_report;
+	u8 *buf;
+	const u8 *output_report;
 	int buf_len = sizeof(pen_output_report);
 
 	dwork = container_of(work, struct delayed_work, work);
@@ -262,12 +201,25 @@ static int veikk_pen_event(struct veikk_pen_report_data *evt,
 }
 
 /*
+ * The last known state of all of the buttons 1-12 (wheel buttons) is stored
+ * in the veikk_device::buttons_state (veikk_device::wheel_state). In this
+ * function:
+ *   1. The buttons_state (wheel_state) is updated
+ *   2. If any buttons are down, mark the modifiers as pressed
+ *   3. Mark all the pressed keys as pressed
+ *
  * Note that this handles both the buttons and the wheel-left and wheel-right
  * events (but not the gesture pad events). These all are emitted from the
  * tablet with the same veikk_report::type of 0x1002. The buttons have a
  * veikk_buttons_report_data::type of 1, while the wheel events have a
  * veikk_buttons_report_data::type of 3, so it is easier to handle them
  * separately in this function and give them separate bitmaps.
+ *
+ * Note also that the modifiers are held down for the duration of the button
+ * press, which means they will also modify other keys pressed at the same
+ * time.
+ *
+ * TODO: how to address this note?
  */
 static int veikk_buttons_event(struct veikk_buttons_report_data *evt,
 		struct hid_device *hid_dev)
@@ -312,11 +264,18 @@ static int veikk_buttons_event(struct veikk_buttons_report_data *evt,
 	input_report_key(input, KEY_F11, buttons_state & 0x400);
 	input_report_key(input, KEY_F12, buttons_state & 0x800);
 
-	input_report_key(input, KEY_F13, wheel_state & 0x1);
-	input_report_key(input, KEY_F14, wheel_state & 0x2);
+	// TODO: make F13 the key for the wheel button; right now it is
+	// hardcoded as the thirteenth button for the A15 Pro (I believe)
+	input_report_key(input, KEY_F13, buttons_state & 0x1000);
+	input_report_key(input, KEY_F14, wheel_state & 0x1);
+	input_report_key(input, KEY_F15, wheel_state & 0x2);
 	return 0;
 }
 
+/*
+ * see description of veikk_buttons_event; this performs the same logic but
+ * for events emitted by the gesture pad
+ */
 static int veikk_pad_event(struct veikk_pad_report_data *evt,
 		struct hid_device *hid_dev)
 {
@@ -342,7 +301,6 @@ static int veikk_pad_event(struct veikk_pad_report_data *evt,
 
 	// double-tap
 	input_report_key(input, KEY_F20, state & 0x10);
-
 	return 0;
 }
 
@@ -352,7 +310,6 @@ static int veikk_raw_event(struct hid_device *hid_dev,
 	struct veikk_device *veikk_dev = hid_get_drvdata(hid_dev);
 	struct input_dev *input;
 	struct veikk_report *veikk_report;
-	int err;
 
 	#ifdef VEIKK_DEBUG_MODE
 	hid_info(hid_dev, "raw report size: %d", size);
@@ -440,7 +397,6 @@ static int veikk_setup_buttons_input(struct input_dev *input,
 	struct veikk_device *veikk_dev = hid_get_drvdata(hid_dev);
 	const struct veikk_model *model = veikk_dev->model;
 	char *input_name;
-	int i;
 
 	// input name = model name + " Keyboard"
 	if (!(input_name = devm_kzalloc(&input->dev, strlen(model->name)+10,
@@ -482,14 +438,6 @@ static int veikk_setup_buttons_input(struct input_dev *input,
 	__set_bit(KEY_LEFTSHIFT, input->keybit);
 	__set_bit(KEY_LEFTMETA, input->keybit);
 
-	// possible keys sent out by regular map
-	//for (i = 0; i < VEIKK_BTN_COUNT; ++i)
-	//	__set_bit(model->pusage_keycode_map[i], input->keybit);
-
-	// possible keys sent out by default map
-	//for (i = 0; i < VEIKK_BTN_COUNT; ++i)
-	//	__set_bit(dfl_pusage_key_map[i], input->keybit);
-
 	input_enable_softrepeat(input, 100, 33);
 	return 0;
 }
@@ -500,7 +448,6 @@ static int veikk_setup_pad_input(struct input_dev *input,
 	struct veikk_device *veikk_dev = hid_get_drvdata(hid_dev);
 	const struct veikk_model *model = veikk_dev->model;
 	char *input_name;
-	int i;
 
 	// input name = model name + " Gesture Pad"
 	if (!(input_name = devm_kzalloc(&input->dev, strlen(model->name)+13,
@@ -621,11 +568,12 @@ static int veikk_probe(struct hid_device *hid_dev,
 		return 0;
 
 	if (!id->driver_data) {
-		hid_err(hid_dev, "id->driver_data missing");
+		hid_err(hid_dev, "veikk model descriptor missing");
 		err = -EINVAL;
 		goto fail;
 	}
 
+	// allocate, fill out veikk device descriptor
 	if (!(veikk_dev = devm_kzalloc(&hid_dev->dev,
 			sizeof(struct veikk_device), GFP_KERNEL))) {
 		hid_err(hid_dev, "error allocating veikk device descriptor");
@@ -636,6 +584,7 @@ static int veikk_probe(struct hid_device *hid_dev,
 	veikk_dev->hid_dev = hid_dev;
 	hid_set_drvdata(hid_dev, veikk_dev);
 
+	// parse report descriptor
 	if ((err = hid_parse(hid_dev))) {
 		hid_err(hid_dev, "hid_parse error");
 		goto fail;
@@ -679,57 +628,34 @@ static void veikk_remove(struct hid_device *hid_dev) {
 	#endif	// VEIKK_DEBUG_MODE
 }
 
-/*
- * List of veikk models; see BUTTON_MAPPING.txt for more information on the
- * pusage_keycode_map field
- *
- * TODO: need to get button map for some devices
- */
+// List of VEIKK models
 static struct veikk_model veikk_model_0x0001 = {
 	.name = "VEIKK S640", .prod_id = 0x0001,
 	.x_max = 32768, .y_max = 32768, .pressure_max = 8192,
-	.pusage_keycode_map = veikk_no_btns,
 };
 static struct veikk_model veikk_model_0x0002 = {
 	.name = "VEIKK A30", .prod_id = 0x0002,
 	.x_max = 32768, .y_max = 32768, .pressure_max = 8192,
-	.pusage_keycode_map = (int[]) {
-		VK_BTN_2, VK_BTN_1, VK_BTN_0, 0,
-		0, 0, VK_BTN_3, 0,
-		0, VK_BTN_DOWN, VK_BTN_UP, VK_BTN_LEFT, VK_BTN_RIGHT
-	},
 	.has_buttons = 1, .has_pad = 1
 };
 static struct veikk_model veikk_model_0x0003 = {
 	.name = "VEIKK A50", .prod_id = 0x0003,
 	.x_max = 32768, .y_max = 32768, .pressure_max = 8192,
-	.pusage_keycode_map = (int[]) {
-		VK_BTN_0, VK_BTN_1, VK_BTN_2, VK_BTN_3,
-		VK_BTN_4, VK_BTN_5, VK_BTN_6, VK_BTN_7,
-		0, VK_BTN_DOWN, VK_BTN_UP, VK_BTN_LEFT, VK_BTN_RIGHT
-	},
 	.has_buttons = 1, .has_pad = 1
 };
 static struct veikk_model veikk_model_0x0004 = {
 	.name = "VEIKK A15", .prod_id = 0x0004,
 	.x_max = 32768, .y_max = 32768, .pressure_max = 8192,
-	.pusage_keycode_map = veikk_no_btns,
 	.has_buttons = 1, .has_pad = 1
 };
 static struct veikk_model veikk_model_0x0006 = {
 	.name = "VEIKK A15 Pro", .prod_id = 0x0006,
 	.x_max = 32768, .y_max = 32768, .pressure_max = 8192,
-	.pusage_keycode_map = veikk_no_btns,
 	.has_buttons = 1, .has_pad = 1
 };
 static struct veikk_model veikk_model_0x1001 = {
 	.name = "VEIKK VK1560", .prod_id = 0x1001,
 	.x_max = 27536, .y_max = 15488, .pressure_max = 8192,
-	.pusage_keycode_map = (int[]) {
-		VK_BTN_0, VK_BTN_1, VK_BTN_2, 0,
-		VK_BTN_3, VK_BTN_4, VK_BTN_5, VK_BTN_6,
-		VK_BTN_ENTER, VK_BTN_DOWN, VK_BTN_UP, VK_BTN_LEFT, VK_BTN_RIGHT
-	},
 	.has_buttons = 1
 };
 // TODO: add more tablets
