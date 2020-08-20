@@ -461,6 +461,12 @@ static int veikk_setup_pad_input(struct input_dev *input,
 	__set_bit(EV_REP, input->evbit);
 	__set_bit(MSC_SCAN, input->mscbit);
 
+	// modifiers; sent out both by default and regular map
+	__set_bit(KEY_LEFTCTRL, input->keybit);
+	__set_bit(KEY_LEFTALT, input->keybit);
+	__set_bit(KEY_LEFTSHIFT, input->keybit);
+	__set_bit(KEY_LEFTMETA, input->keybit);
+
 	// two-finger-tap, up, down, left, right
 	__set_bit(KEY_F20, input->keybit);
 	__set_bit(KEY_F21, input->keybit);
@@ -631,7 +637,7 @@ static void veikk_remove(struct hid_device *hid_dev) {
 // List of VEIKK models
 static struct veikk_model veikk_model_0x0001 = {
 	.name = "VEIKK S640", .prod_id = 0x0001,
-	.x_max = 32768, .y_max = 32768, .pressure_max = 8192,
+	.x_max = 30480, .y_max = 20320, .pressure_max = 8192,
 };
 static struct veikk_model veikk_model_0x0002 = {
 	.name = "VEIKK A30", .prod_id = 0x0002,
@@ -640,7 +646,7 @@ static struct veikk_model veikk_model_0x0002 = {
 };
 static struct veikk_model veikk_model_0x0003 = {
 	.name = "VEIKK A50", .prod_id = 0x0003,
-	.x_max = 32768, .y_max = 32768, .pressure_max = 8192,
+	.x_max = 50800, .y_max = 30480, .pressure_max = 8192,
 	.has_buttons = 1, .has_pad = 1
 };
 static struct veikk_model veikk_model_0x0004 = {
@@ -655,7 +661,7 @@ static struct veikk_model veikk_model_0x0006 = {
 };
 static struct veikk_model veikk_model_0x1001 = {
 	.name = "VEIKK VK1560", .prod_id = 0x1001,
-	.x_max = 27536, .y_max = 15488, .pressure_max = 8192,
+	.x_max = 34420, .y_max = 19360, .pressure_max = 8192,
 	.has_buttons = 1
 };
 // TODO: add more tablets
