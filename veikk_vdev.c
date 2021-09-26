@@ -106,9 +106,6 @@ static int veikk_s640_handle_raw_data(struct veikk *veikk, u8 *data, int size,
         // dispatch events with input_dev
         pen_report = (struct veikk_pen_report *) data;
 
-        // TODO: remove
-        printk("%u %u %u\n",pen_report->x, pen_report->y, pen_report->pressure);
-
         input_report_abs(pen_input, veikk->x_map_axis,
                          veikk->x_map_dir*pen_report->x);
         input_report_abs(pen_input, veikk->y_map_axis,
