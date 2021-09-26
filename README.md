@@ -1,5 +1,9 @@
-**Note: v3 is in the works! See the v3-alpha branch if you'd like to help
-test or contribute.**
+# An [official driver][official-driver] has been released by VEIKK.
+
+This project should provide basic functionality for tablets but is no longer
+actively maintained. The original author is too busy with school/work.
+
+---
 
 # VEIKK Linux Driver
 A driver for [VEIKK][0]-brand digitizers/drawing tablets using the `usbhid` API.
@@ -56,7 +60,7 @@ Currently, the configurable parameters are `screen_size`, `screen_map`,
 parameters is available in [`veikk_modparms.c`][9]. You can update a parameter
 by simply writing the new value to it as root.
 
-The **(new!)** visual configuration utility is available at
+The visual configuration utility is available at
 [@jlam55555/veikk-linux-driver-gui][10].
 
 ---
@@ -73,10 +77,8 @@ The **(new!)** visual configuration utility is available at
 ---
 
 ### Development status
-Currently, development is focused on the S640, but PR's are welcome. The
-developer only has an S640 at the moment and is unable to directly develop new
-features for other models, but open to feedback and questions at jonlamdev
-at gmail dot com.
+Development was focused on the S640, A50, and VK1560, devices that are owned
+by the author of this driver.
 
 ---
 
@@ -98,3 +100,4 @@ at gmail dot com.
 [10]: https://github.com/jlam55555/veikk-linux-driver-gui
 [11]: https://i.imgur.com/Mug8gRn.jpg
 [v3-update-blog-post]: http://everything-is-sheep.herokuapp.com/posts/veikk-linux-driver-v3-notes
+[official-driver]: https://github.com/jlam55555/veikk-linux-driver/issues/71
