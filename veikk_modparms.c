@@ -13,6 +13,7 @@
  *       e.g., device-specific module parameters? e.g., ones for gesture pad
  */
 
+#include <linux/math64.h>
 #include <linux/moduleparam.h>
 #include "veikk.h"
 
@@ -338,8 +339,8 @@ void veikk_configure_input_devs(struct veikk_rect ss,
 int veikk_map_pressure(s64 pres, s64 pres_max,
                        struct veikk_pressure_map *coef) {
     static const int sf = 100;  // constant scale factor of 100 for all coefs
-    return (s32) (((coef->a3*pres*pres*pres/pres_max/pres_max)
-                 + (coef->a2*pres*pres/pres_max)
+    return (s32) div64_s64((div64_s64(div64_s64(coef->a3*pres*pres*pres, pres_max), pres_max)
+                 + div64_s64(coef->a2*pres*pres, pres_max)
                  + (coef->a1*pres)
-                 + (coef->a0*pres_max))/sf);
+                 + (coef->a0*pres_max)), sf);
 }
