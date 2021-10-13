@@ -64,7 +64,7 @@ enum veikk_orientation {
 struct veikk_pen_report {
     u8 report_id;
     u8 buttons;
-    u16 x, y, pressure;
+    u16 x, y, pressure, tilt;
 };
 
 // device-specific properties; one created for every device. These
